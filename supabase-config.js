@@ -56,3 +56,101 @@ export async function getUserPlan(userId) {
   return String(plan).toLowerCase() === 'pro' ? 'pro' : 'free';
 }
 
+/** Ensures a row exists in public.users (required for payments FK). */
+async function ensurePublicUserRow(user) {
+  if (!user?.id) return { error: new Error('Missing user') };
+  const { data: row } = await supabase
+    .from('users')
+    .select('id')
+    .eq('id', user.id)
+    .maybeSingle();
+  if (row) return { error: null };
+  const { error } = await supabase.from('users').insert({
+    id: user.id,
+    email: user.email || null,
+    plan: 'free',
+  });
+  return { error };
+}
+
+/**
+ * Upload proof file to Storage and insert a pending payments row.
+ * Requires: payments table, payment-proofs bucket, and RLS (see supabase-schema.sql).
+ */
+export async function submitManualPaymentProofFlow(file) {
+  if (!file || !(file instanceof File)) {
+    return { ok: false, message: 'Please choose a file to upload.' };
+  }
+
+  const { data: authData, error: authErr } = await supabase.auth.getUser();
+  if (authErr || !authData?.user) {
+    return { ok: false, message: 'Please sign in to submit payment proof.' };
+  }
+
+  const user = authData.user;
+  const { error: ensureErr } = await ensurePublicUserRow(user);
+  if (ensureErr) {
+    return {
+      ok: false,
+      message: ensureErr.message || 'Could not prepare your account. Try again.',
+    };
+  }
+
+  const rawExt = (file.name.split('.').pop() || 'bin').slice(0, 12);
+  const safeExt = /^[a-z0-9]+$/i.test(rawExt) ? rawExt.toLowerCase() : 'bin';
+  const objectPath = `${user.id}/${crypto.randomUUID()}.${safeExt}`;
+
+  const { error: upErr } = await supabase.storage
+    .from('payment-proofs')
+    .upload(objectPath, file, {
+      cacheControl: '3600',
+      upsert: false,
+      contentType: file.type || 'application/octet-stream',
+    });
+
+  if (upErr) {
+    return {
+      ok: false,
+      message: upErr.message || 'Upload failed. Try again or use a smaller file.',
+    };
+  }
+
+  const { data: inserted, error: insErr } = await supabase
+    .from('payments')
+    .insert({
+      user_id: user.id,
+      email: user.email || null,
+      status: 'pending',
+      proof_path: objectPath,
+    })
+    .select('id')
+    .single();
+
+  if (insErr) {
+    return {
+      ok: false,
+      message: insErr.message || 'Could not save payment record.',
+    };
+  }
+
+  return { ok: true, paymentId: inserted?.id };
+}
+
+/**
+ * Set a user's plan to Pro (for admins after verifying manual payment).
+ * Requires your user row to have is_admin = true (set in Supabase SQL Editor).
+ * Or run the same update in SQL Editor with service role.
+ */
+export async function approveUser(userId) {
+  if (!userId) {
+    return { data: null, error: { message: 'userId is required' } };
+  }
+  const { data, error } = await supabase
+    .from('users')
+    .update({ plan: 'pro' })
+    .eq('id', userId)
+    .select('id, plan, email')
+    .maybeSingle();
+  return { data, error };
+}
+

@@ -11,6 +11,10 @@ create table if not exists public.users (
   referral_code text
 );
 
+-- App admins can approve manual payments from the client (see approveUser in supabase-config.js).
+-- Set once in SQL Editor: update public.users set is_admin = true where email = 'you@example.com';
+alter table public.users add column if not exists is_admin boolean not null default false;
+
 -- Prop firm settings per user (one row per firm).
 create table if not exists public.prop_settings (
   user_id uuid not null references public.users(id) on delete cascade,
@@ -50,6 +54,17 @@ create table if not exists public.usage (
   reset_at timestamptz not null default now()
 );
 
+-- Manual UPI / payment proofs (screenshot path in Storage bucket payment-proofs).
+create table if not exists public.payments (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.users(id) on delete cascade,
+  email text,
+  status text not null default 'pending',
+  proof_path text,
+  created_at timestamptz not null default now(),
+  constraint payments_status_check check (status in ('pending', 'approved'))
+);
+
 -- Helpful indexes.
 create index if not exists idx_prop_settings_user on public.prop_settings (user_id);
 create index if not exists idx_trades_user_ts on public.trades (user_id, timestamp desc);
@@ -61,6 +76,7 @@ alter table public.prop_settings enable row level security;
 alter table public.trades enable row level security;
 alter table public.signals enable row level security;
 alter table public.usage enable row level security;
+alter table public.payments enable row level security;
 
 -- USERS policies
 create policy "users_select_own" on public.users
@@ -71,6 +87,17 @@ create policy "users_insert_own" on public.users
 
 create policy "users_update_own" on public.users
   for update using (id = auth.uid()) with check (id = auth.uid());
+
+-- Admins may update any user row (e.g. set plan = pro after verifying payment).
+create policy "users_update_as_admin" on public.users
+  for update
+  using (
+    exists (
+      select 1 from public.users u
+      where u.id = auth.uid() and coalesce(u.is_admin, false) = true
+    )
+  )
+  with check (true);
 
 -- PROP SETTINGS policies
 create policy "prop_settings_select_own" on public.prop_settings
@@ -108,4 +135,49 @@ create policy "usage_insert_own" on public.usage
 
 create policy "usage_update_own" on public.usage
   for update using (user_id = auth.uid()) with check (user_id = auth.uid());
+
+-- PAYMENTS policies
+create policy "payments_select_own" on public.payments
+  for select using (user_id = auth.uid());
+
+create policy "payments_insert_own" on public.payments
+  for insert with check (user_id = auth.uid());
+
+-- Admins can read all payments (review queue).
+create policy "payments_select_as_admin" on public.payments
+  for select using (
+    exists (
+      select 1 from public.users u
+      where u.id = auth.uid() and coalesce(u.is_admin, false) = true
+    )
+  );
+
+-- Admins can mark payments approved.
+create policy "payments_update_as_admin" on public.payments
+  for update using (
+    exists (
+      select 1 from public.users u
+      where u.id = auth.uid() and coalesce(u.is_admin, false) = true
+    )
+  )
+  with check (true);
+
+-- ═══ Storage: payment proof screenshots ═══
+insert into storage.buckets (id, name, public)
+values ('payment-proofs', 'payment-proofs', false)
+on conflict (id) do nothing;
+
+create policy "payment_proofs_insert_own"
+  on storage.objects for insert to authenticated
+  with check (
+    bucket_id = 'payment-proofs'
+    and (storage.foldername(name))[1] = auth.uid()::text
+  );
+
+create policy "payment_proofs_select_own"
+  on storage.objects for select to authenticated
+  using (
+    bucket_id = 'payment-proofs'
+    and (storage.foldername(name))[1] = auth.uid()::text
+  );
 
