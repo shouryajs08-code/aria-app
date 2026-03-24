@@ -2060,6 +2060,9 @@ body.aria-auth-locked .app {
 
 const FINNHUB_API_KEY = 'd715svpr01ql6rg1g4egd715svpr01ql6rg1g4f0';
 
+/** Cloudflare Worker — always absolute URL (relative /api/aria breaks on static hosts). */
+const ARIA_WORKER_API_URL = 'https://aria-proxy.aria-trader.workers.dev/api/aria';
+
 const PROP_FIRMS = {
   'FTMO': { maxDD: 10, dailyLoss: 5, target: 10 },
   'MyForexFunds': { maxDD: 12, dailyLoss: 5, target: 8 },
@@ -2705,46 +2708,82 @@ MARKET CONTEXT → TRADE SETUP → RISK CHECK → RECOMMENDATION`;
 
   chatHist.push({ role: 'user', content: text });
 
+  const payload = {
+    system,
+    messages: chatHist.slice(-14),
+  };
+
   try {
-    const res = await fetch('https://aria-proxy.aria-trader.workers.dev/api/aria', {
+    const response = await fetch(ARIA_WORKER_API_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         Authorization: 'Bearer ' + accessToken,
       },
-      body: JSON.stringify({
-        system,
-        messages: chatHist.slice(-14)
-      })
+      body: JSON.stringify(payload),
     });
 
-    const data = await res.json().catch(() => ({}));
+    const rawText = await response.text();
+    let data = {};
+    if (rawText) {
+      try {
+        data = JSON.parse(rawText);
+      } catch (parseErr) {
+        console.error('ARIA proxy non-JSON body:', parseErr, rawText.slice(0, 200));
+        thinkEl.remove();
+        chatHist.pop();
+        addAriaMsg(
+          '<span style="color:var(--danger)">Error: ARIA proxy returned invalid JSON (HTTP ' + response.status + ').</span>'
+        );
+        return;
+      }
+    }
+
     thinkEl.remove();
 
-    const reply = (data.content && data.content[0] && data.content[0].text) ||
-      data.text || (data.message && String(data.message)) || '';
-    const errMsg = (data.error && (data.error.message || data.error)) || (!res.ok && (data.detail || 'Request failed')) || '';
-
-    if (errMsg && !reply) {
+    if (!response.ok) {
       chatHist.pop();
+      const err = data.error;
+      const errMsg =
+        (typeof err === 'string' ? err : err && err.message) ||
+        data.message ||
+        data.detail ||
+        'Request failed (HTTP ' + response.status + ')';
+      console.error('ARIA proxy error:', response.status, data);
       addAriaMsg('<span style="color:var(--danger)">Error: ' + esc(String(errMsg)) + '</span>');
-    } else if (!reply) {
+      return;
+    }
+
+    const reply =
+      (data.content && data.content[0] && data.content[0].text) ||
+      (typeof data.text === 'string' ? data.text : '') ||
+      '';
+
+    if (!reply) {
       chatHist.pop();
-      addAriaMsg('<span style="color:var(--danger)">Empty response from ARIA proxy. Deploy the worker and check CORS.</span>');
+      console.warn('ARIA empty reply payload:', data);
+      addAriaMsg('<span style="color:var(--danger)">Empty response from ARIA. Check worker logs and API key.</span>');
     } else {
-      chatHist.push({ role:'assistant', content: reply });
+      chatHist.push({ role: 'assistant', content: reply });
       addAriaMsg(formatReply(reply));
       autoLogSignal(text, reply);
       updateRisk();
     }
-  } catch(e) {
+  } catch (e) {
     thinkEl.remove();
     chatHist.pop();
-    addAriaMsg('<span style="color:var(--danger)">Network error: ' + esc(e.message) + '</span>');
+    const msg = e && e.message ? e.message : String(e);
+    console.error('ARIA fetch failed:', e);
+    addAriaMsg(
+      '<span style="color:var(--danger)">Network error: ' + esc(msg) + '</span>' +
+      '<br><span style="color:var(--muted);font-size:12px">Confirm URL <code style="font-size:11px">' +
+      esc(ARIA_WORKER_API_URL) +
+      '</code> is reachable (HTTPS), CORS allows your origin, and nothing is blocking the request.</span>'
+    );
+  } finally {
+    busy = false;
+    document.getElementById('sendBtn').disabled = false;
   }
-
-  busy = false;
-  document.getElementById('sendBtn').disabled = false;
 }
 
 function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }

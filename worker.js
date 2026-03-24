@@ -1,26 +1,24 @@
 /**
  * ARIA proxy — Cloudflare Worker
- * Forwards authenticated requests to Anthropic Messages API.
+ * POST /api/aria → Anthropic Messages API (Claude Sonnet)
  *
- * Secrets:  wrangler secret put ANTHROPIC_API_KEY
- * Optional: set SUPABASE_URL + SUPABASE_ANON_KEY (Worker vars, same as frontend)
- *           to validate the Bearer JWT via GET /auth/v1/user. If omitted, any
- *           non-empty Bearer token is accepted (not recommended for production).
+ * Secret: wrangler secret put ANTHROPIC_API_KEY
+ *
+ * Optional: SUPABASE_URL + SUPABASE_ANON_KEY (Worker vars) to verify JWT.
  */
 
-function corsHeaders(env) {
-  const origin = env.ALLOWED_ORIGIN || 'https://aria-trader.netlify.app';
+function corsHeaders() {
   return {
-    'Access-Control-Allow-Origin': origin,
+    'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type, Authorization',
     'Access-Control-Max-Age': '86400',
   };
 }
 
-function jsonResponse(env, body, status) {
-  const headers = new Headers(corsHeaders(env));
-  headers.set('Content-Type', 'application/json');
+function jsonResponse(body, status = 200) {
+  const headers = new Headers(corsHeaders());
+  headers.set('Content-Type', 'application/json; charset=utf-8');
   return new Response(JSON.stringify(body), { status, headers });
 }
 
@@ -29,7 +27,7 @@ async function verifySupabaseUser(env, jwt) {
   const anon = env.SUPABASE_ANON_KEY;
   if (!url || !anon) return true;
 
-  const res = await fetch(`${url.replace(/\/$/, '')}/auth/v1/user`, {
+  const res = await fetch(`${String(url).replace(/\/$/, '')}/auth/v1/user`, {
     method: 'GET',
     headers: {
       Authorization: `Bearer ${jwt}`,
@@ -38,36 +36,60 @@ async function verifySupabaseUser(env, jwt) {
   });
 
   if (!res.ok) {
-    console.error('Supabase JWT verification failed:', res.status, await res.text().catch(() => ''));
+    console.error('Supabase JWT verification failed:', res.status);
     return false;
   }
   return true;
 }
 
 export default {
-  async fetch(request, env, ctx) {
-    const cors = corsHeaders(env);
+  async fetch(request, env) {
+    const cors = corsHeaders();
+    const url = new URL(request.url);
 
-    if (request.method === 'OPTIONS') {
-      return new Response(null, { status: 200, headers: cors });
+    // Only /api/aria is served (no trailing-slash mismatch)
+    const path = url.pathname.replace(/\/$/, '') || '/';
+    if (path !== '/api/aria') {
+      return jsonResponse({ error: { message: 'Not found' } }, 404);
     }
 
-    const url = new URL(request.url);
-    if (request.method !== 'POST' || url.pathname !== '/api/aria') {
-      return jsonResponse(env, { error: { message: 'Not found' } }, 404);
+    // Preflight
+    if (request.method === 'OPTIONS') {
+      return new Response(null, { status: 204, headers: cors });
+    }
+
+    // Browser GET → helpful JSON (not "Not found")
+    if (request.method === 'GET') {
+      return jsonResponse(
+        {
+          ok: true,
+          service: 'aria-proxy',
+          path: '/api/aria',
+          message: 'Use POST with JSON body: { "system": string, "messages": array }',
+          methods: ['POST', 'OPTIONS'],
+        },
+        200
+      );
+    }
+
+    if (request.method !== 'POST') {
+      return jsonResponse(
+        { error: { message: 'Method not allowed', allowed: ['GET', 'POST', 'OPTIONS'] } },
+        405
+      );
     }
 
     const authHeader = request.headers.get('Authorization') || '';
     const bearerMatch = /^Bearer\s+(\S+)/i.exec(authHeader);
     if (!bearerMatch || !bearerMatch[1]) {
       console.error('Missing or invalid Authorization header');
-      return jsonResponse(env, { error: { message: 'Unauthorized' } }, 401);
+      return jsonResponse({ error: { message: 'Unauthorized' } }, 401);
     }
     const jwt = bearerMatch[1];
 
     const okUser = await verifySupabaseUser(env, jwt);
     if (!okUser) {
-      return jsonResponse(env, { error: { message: 'Invalid or expired session' } }, 401);
+      return jsonResponse({ error: { message: 'Invalid or expired session' } }, 401);
     }
 
     let body;
@@ -75,18 +97,18 @@ export default {
       body = await request.json();
     } catch (e) {
       console.error('Invalid JSON body:', e);
-      return jsonResponse(env, { error: { message: 'Invalid JSON body' } }, 400);
+      return jsonResponse({ error: { message: 'Invalid JSON body' } }, 400);
     }
 
     const { system, messages } = body;
     if (!Array.isArray(messages)) {
-      return jsonResponse(env, { error: { message: 'messages must be an array' } }, 400);
+      return jsonResponse({ error: { message: 'messages must be an array' } }, 400);
     }
 
     const apiKey = env.ANTHROPIC_API_KEY;
     if (!apiKey) {
       console.error('ANTHROPIC_API_KEY is not set');
-      return jsonResponse(env, { error: { message: 'Server misconfiguration' } }, 500);
+      return jsonResponse({ error: { message: 'Server misconfiguration' } }, 500);
     }
 
     const anthropicPayload = {
@@ -107,32 +129,35 @@ export default {
         body: JSON.stringify(anthropicPayload),
       });
 
-      const outHeaders = new Headers(cors);
-      const ct = ar.headers.get('Content-Type');
-      if (ct) outHeaders.set('Content-Type', ct);
-      else outHeaders.set('Content-Type', 'application/json');
-
-      const text = await ar.text();
-
-      if (!ar.ok) {
-        console.error('Anthropic API error:', ar.status, text.slice(0, 800));
-        let parsed;
-        try {
-          parsed = JSON.parse(text);
-        } catch {
-          parsed = { error: { message: text.slice(0, 300) || `HTTP ${ar.status}` } };
-        }
-        return new Response(JSON.stringify(parsed.error ? parsed : { error: { message: 'Anthropic error', detail: parsed } }), {
-          status: 502,
-          headers: outHeaders,
-        });
+      const raw = await ar.text();
+      let parsed;
+      try {
+        parsed = JSON.parse(raw);
+      } catch {
+        parsed = {
+          error: {
+            type: 'parse_error',
+            message: raw.slice(0, 500) || `Upstream HTTP ${ar.status}`,
+          },
+        };
       }
 
-      return new Response(text, { status: ar.status, headers: outHeaders });
+      const headers = new Headers(corsHeaders());
+      headers.set('Content-Type', 'application/json; charset=utf-8');
+
+      if (!ar.ok) {
+        console.error('Anthropic API error:', ar.status, raw.slice(0, 800));
+        const errBody =
+          parsed && parsed.error
+            ? parsed
+            : { error: { message: 'Anthropic request failed', status: ar.status, detail: parsed } };
+        return new Response(JSON.stringify(errBody), { status: 502, headers });
+      }
+
+      return new Response(JSON.stringify(parsed), { status: 200, headers });
     } catch (e) {
       console.error('Anthropic fetch failed:', e);
       return jsonResponse(
-        env,
         { error: { message: e instanceof Error ? e.message : 'Upstream request failed' } },
         502
       );
