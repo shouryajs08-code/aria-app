@@ -15,6 +15,33 @@ create table if not exists public.users (
 -- Set once in SQL Editor: update public.users set is_admin = true where email = 'you@example.com';
 alter table public.users add column if not exists is_admin boolean not null default false;
 
+-- Auto-provision public.users on signup (SECURITY DEFINER — bypasses RLS).
+-- The payment flow only INSERTs into payments; it must not INSERT into users from the client.
+create or replace function public.handle_new_user()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $func$
+begin
+  insert into public.users (id, email, plan)
+  values (new.id, new.email, 'free')
+  on conflict (id) do update
+    set email = coalesce(excluded.email, public.users.email);
+  return new;
+end;
+$func$;
+
+drop trigger if exists on_auth_user_created on auth.users;
+create trigger on_auth_user_created
+  after insert on auth.users
+  for each row execute function public.handle_new_user();
+
+-- One-time backfill for accounts that signed up before this trigger existed:
+-- insert into public.users (id, email, plan)
+-- select id, email, 'free' from auth.users a
+-- where not exists (select 1 from public.users u where u.id = a.id);
+
 -- Prop firm settings per user (one row per firm).
 create table if not exists public.prop_settings (
   user_id uuid not null references public.users(id) on delete cascade,
@@ -167,17 +194,29 @@ insert into storage.buckets (id, name, public)
 values ('payment-proofs', 'payment-proofs', false)
 on conflict (id) do nothing;
 
+-- Use split_part (works reliably); storage.foldername() can behave differently across versions.
+drop policy if exists "payment_proofs_insert_own" on storage.objects;
+drop policy if exists "payment_proofs_select_own" on storage.objects;
+
 create policy "payment_proofs_insert_own"
   on storage.objects for insert to authenticated
   with check (
     bucket_id = 'payment-proofs'
-    and (storage.foldername(name))[1] = auth.uid()::text
+    and split_part(name, '/', 1) = auth.uid()::text
   );
 
 create policy "payment_proofs_select_own"
   on storage.objects for select to authenticated
   using (
     bucket_id = 'payment-proofs'
-    and (storage.foldername(name))[1] = auth.uid()::text
+    and split_part(name, '/', 1) = auth.uid()::text
+  );
+
+drop policy if exists "payment_proofs_delete_own" on storage.objects;
+create policy "payment_proofs_delete_own"
+  on storage.objects for delete to authenticated
+  using (
+    bucket_id = 'payment-proofs'
+    and split_part(name, '/', 1) = auth.uid()::text
   );
 
