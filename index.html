@@ -1459,7 +1459,11 @@ body.aria-auth-locked .app {
       submitBtn.textContent = 'Submitting…';
     }
     try {
-      const result = await submitManualPaymentProofFlow(fileInp.files[0]);
+      const emailEl = document.getElementById('manualPayEmail');
+      const emailVal = emailEl && emailEl.value ? emailEl.value.trim() : '';
+      const result = await submitManualPaymentProofFlow(fileInp.files[0], {
+        email: emailVal || undefined,
+      });
       if (!result.ok) {
         alert(result.message || 'Could not submit payment proof.');
         return;
@@ -2148,11 +2152,13 @@ body.aria-auth-locked .app {
     </div>
     <div class="manual-pay-amount">₹1999</div>
     <div class="modal-label" style="text-align:center;margin-top:4px">UPI ID</div>
-    <div class="manual-pay-upi" id="manualPayUpi">shourya@upi</div>
+    <div class="manual-pay-upi" id="manualPayUpi">7276367769@ibl</div>
     <p class="modal-hint" style="text-align:center;margin:12px 0;line-height:1.5">
       Send payment and upload screenshot
     </p>
     <div id="manualPayForm">
+      <div class="modal-label" style="margin-bottom:6px">Email (optional)</div>
+      <input type="email" class="modal-input" id="manualPayEmail" placeholder="you@example.com" autocomplete="email" style="width:100%;box-sizing:border-box;margin-bottom:12px">
       <div class="manual-pay-file-wrap">
         <div class="modal-label" style="margin-bottom:8px">Payment screenshot</div>
         <input type="file" id="manualPayFile" accept="image/*,.pdf" aria-label="Upload payment proof">
@@ -2427,12 +2433,14 @@ function openManualUpgradeModal() {
   const form = document.getElementById('manualPayForm');
   const successEl = document.getElementById('manualPaySuccess');
   const fileInp = document.getElementById('manualPayFile');
+  const emailInp = document.getElementById('manualPayEmail');
   if (form) form.classList.remove('hidden');
   if (successEl) {
     successEl.classList.add('hidden');
     successEl.textContent = '';
   }
   if (fileInp) fileInp.value = '';
+  if (emailInp) emailInp.value = '';
   if (overlay) overlay.classList.add('open');
 }
 function closeManualUpgradeModal() {

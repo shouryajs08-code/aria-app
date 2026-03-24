@@ -82,9 +82,10 @@ create table if not exists public.usage (
 );
 
 -- Manual UPI / payment proofs (screenshot path in Storage bucket payment-proofs).
+-- user_id is optional (anonymous visitors submit with anon key; no auth.uid()).
 create table if not exists public.payments (
   id uuid primary key default gen_random_uuid(),
-  user_id uuid not null references public.users(id) on delete cascade,
+  user_id uuid references public.users(id) on delete set null,
   email text,
   status text not null default 'pending',
   proof_path text,
@@ -103,7 +104,8 @@ alter table public.prop_settings enable row level security;
 alter table public.trades enable row level security;
 alter table public.signals enable row level security;
 alter table public.usage enable row level security;
-alter table public.payments enable row level security;
+-- payments: RLS off so anonymous (anon role) inserts work without auth.uid().
+alter table public.payments disable row level security;
 
 -- USERS policies
 create policy "users_select_own" on public.users
@@ -163,31 +165,13 @@ create policy "usage_insert_own" on public.usage
 create policy "usage_update_own" on public.usage
   for update using (user_id = auth.uid()) with check (user_id = auth.uid());
 
--- PAYMENTS policies
-create policy "payments_select_own" on public.payments
-  for select using (user_id = auth.uid());
-
-create policy "payments_insert_own" on public.payments
-  for insert with check (user_id = auth.uid());
-
--- Admins can read all payments (review queue).
-create policy "payments_select_as_admin" on public.payments
-  for select using (
-    exists (
-      select 1 from public.users u
-      where u.id = auth.uid() and coalesce(u.is_admin, false) = true
-    )
-  );
-
--- Admins can mark payments approved.
-create policy "payments_update_as_admin" on public.payments
-  for update using (
-    exists (
-      select 1 from public.users u
-      where u.id = auth.uid() and coalesce(u.is_admin, false) = true
-    )
-  )
-  with check (true);
+-- PAYMENTS: RLS disabled above — no policies apply. Anyone with the anon key can INSERT.
+-- If you turn RLS on later, add e.g. FOR INSERT TO anon, authenticated WITH CHECK (true)
+-- and tighten SELECT separately.
+drop policy if exists "payments_select_own" on public.payments;
+drop policy if exists "payments_insert_own" on public.payments;
+drop policy if exists "payments_select_as_admin" on public.payments;
+drop policy if exists "payments_update_as_admin" on public.payments;
 
 -- ═══ Storage: payment proof screenshots ═══
 insert into storage.buckets (id, name, public)
@@ -219,4 +203,26 @@ create policy "payment_proofs_delete_own"
     bucket_id = 'payment-proofs'
     and split_part(name, '/', 1) = auth.uid()::text
   );
+
+-- Anonymous uploads (anon key, no login). Simple; tighten later when you add auth.
+drop policy if exists "payment_proofs_anon_insert" on storage.objects;
+create policy "payment_proofs_anon_insert"
+  on storage.objects for insert to anon
+  with check (bucket_id = 'payment-proofs');
+
+drop policy if exists "payment_proofs_anon_delete" on storage.objects;
+create policy "payment_proofs_anon_delete"
+  on storage.objects for delete to anon
+  using (bucket_id = 'payment-proofs');
+
+-- ═══ One-time migration (existing projects that already created `payments`) ═══
+-- Run in SQL Editor if inserts still fail:
+--
+-- alter table public.payments drop constraint if exists payments_user_id_fkey;
+-- alter table public.payments alter column user_id drop not null;
+-- alter table public.payments
+--   add constraint payments_user_id_fkey
+--   foreign key (user_id) references public.users(id) on delete set null;
+--
+-- alter table public.payments disable row level security;
 
