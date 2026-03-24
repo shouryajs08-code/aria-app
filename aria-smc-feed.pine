@@ -1,0 +1,216 @@
+//@version=5
+indicator("ARIA SMC Data Feed", overlay=true, max_bars_back=500)
+
+// ═══════════════════════════════════════════════════════════
+//  ARIA SMC DATA FEED — Pine Script v5
+//  Sends full ICT/SMC analysis to your ARIA server
+//  Set up ONE alert per pair using this script
+//  Webhook URL: https://your-railway-url.up.railway.app/webhook
+// ═══════════════════════════════════════════════════════════
+
+// ── INPUTS ────────────────────────────────────────────────
+ema20_len   = input.int(20,  "EMA 20")
+ema50_len   = input.int(50,  "EMA 50")
+ema200_len  = input.int(200, "EMA 200")
+rsi_len     = input.int(14,  "RSI Length")
+bb_len      = input.int(20,  "BB Length")
+bb_mult     = input.float(2.0,"BB Multiplier")
+atr_len     = input.int(14,  "ATR Length")
+swing_len   = input.int(10,  "Swing High/Low Lookback")
+ob_len      = input.int(10,  "Order Block Lookback")
+
+// ── EMAs ──────────────────────────────────────────────────
+ema20  = ta.ema(close, ema20_len)
+ema50  = ta.ema(close, ema50_len)
+ema200 = ta.ema(close, ema200_len)
+
+// ── RSI ───────────────────────────────────────────────────
+rsi = ta.rsi(close, rsi_len)
+
+// ── ATR ───────────────────────────────────────────────────
+atr = ta.atr(atr_len)
+
+// ── Bollinger Bands ───────────────────────────────────────
+[bb_mid, bb_upper, bb_lower] = ta.bb(close, bb_len, bb_mult)
+
+// ── Swing Highs / Lows (Liquidity Levels) ────────────────
+swing_high = ta.highest(high, swing_len)
+swing_low  = ta.lowest(low,  swing_len)
+
+// ── Higher TF Highs/Lows (for external liquidity) ────────
+// H1 range (approx 12 x M5 candles = 1 hour)
+h1_high = ta.highest(high, 12)
+h1_low  = ta.lowest(low,  12)
+// H4 range (approx 48 x M5 candles)
+h4_high = ta.highest(high, 48)
+h4_low  = ta.lowest(low,  48)
+
+// ── Market Structure: BOS & CHoCH ────────────────────────
+// Track last 3 swing highs and lows for structure breaks
+var float last_sh  = na
+var float last_sl  = na
+var float prev_sh  = na
+var float prev_sl  = na
+var string bos_dir = "None"
+var string choch   = "None"
+var int    bos_bar = 0
+
+// Detect pivot highs and lows
+ph = ta.pivothigh(high, swing_len, swing_len)
+pl = ta.pivotlow(low,   swing_len, swing_len)
+
+if not na(ph)
+    prev_sh := last_sh
+    last_sh := ph
+
+if not na(pl)
+    prev_sl := last_sl
+    last_sl := pl
+
+// BOS: price closes beyond last swing high/low
+if not na(last_sh) and close > last_sh and bos_bar != bar_index
+    bos_dir := "Bullish"
+    bos_bar := bar_index
+    choch   := close < nz(prev_sl, last_sl) ? "CHoCH Bearish" : "None"
+
+if not na(last_sl) and close < last_sl and bos_bar != bar_index
+    bos_dir := "Bearish"
+    bos_bar := bar_index
+    choch   := close > nz(prev_sh, last_sh) ? "CHoCH Bullish" : "None"
+
+// ── Order Blocks ──────────────────────────────────────────
+// Bearish OB: last bullish candle before a bearish BOS
+// Bullish OB: last bearish candle before a bullish BOS
+var float ob_high = na
+var float ob_low  = na
+var string ob_dir = "None"
+
+for i = 1 to ob_len
+    if close[i] > open[i] and close < low[i]  // bearish engulf after bull candle
+        ob_high := high[i]
+        ob_low  := low[i]
+        ob_dir  := "Bearish OB"
+        break
+    if close[i] < open[i] and close > high[i]  // bullish engulf after bear candle
+        ob_high := high[i]
+        ob_low  := low[i]
+        ob_dir  := "Bullish OB"
+        break
+
+// ── Fair Value Gaps (FVG) ─────────────────────────────────
+// Bullish FVG: low[0] > high[2] (gap up)
+// Bearish FVG: high[0] < low[2] (gap down)
+var float fvg_high = na
+var float fvg_low  = na
+var string fvg_dir = "None"
+
+if low > high[2]
+    fvg_high := low
+    fvg_low  := high[2]
+    fvg_dir  := "Bullish FVG"
+
+if high < low[2]
+    fvg_high := low[2]
+    fvg_low  := high
+    fvg_dir  := "Bearish FVG"
+
+// ── Premium / Discount ────────────────────────────────────
+range_size  = swing_high - swing_low
+equilibrium = swing_low + range_size * 0.5
+premium_z   = swing_low + range_size * 0.75
+discount_z  = swing_low + range_size * 0.25
+
+pd_zone = close > premium_z ? "Premium" : close < discount_z ? "Discount" : "Equilibrium"
+
+// ── Market Phase ──────────────────────────────────────────
+above_ema20  = close > ema20
+above_ema50  = close > ema50
+above_ema200 = close > ema200
+
+market_phase =
+  above_ema20 and above_ema50 and above_ema200 ? "Accumulation/Markup" :
+  not above_ema20 and not above_ema50 and not above_ema200 ? "Distribution/Markdown" :
+  above_ema200 ? "Retracement in Uptrend" : "Retracement in Downtrend"
+
+// ── Candle Character ──────────────────────────────────────
+bull_candle = close > open
+bear_candle = close < open
+doji_candle = math.abs(close - open) < (high - low) * 0.1
+
+candle_char = doji_candle ? "Doji" : bull_candle ? "Bullish" : "Bearish"
+prev1_char  = close[1] > open[1] ? "Bullish" : close[1] < open[1] ? "Bearish" : "Doji"
+prev2_char  = close[2] > open[2] ? "Bullish" : close[2] < open[2] ? "Bearish" : "Doji"
+
+// ── Overall Bias ──────────────────────────────────────────
+bull_points = 0
+bull_points := bull_points + (above_ema20  ? 1 : 0)
+bull_points := bull_points + (above_ema50  ? 1 : 0)
+bull_points := bull_points + (above_ema200 ? 1 : 0)
+bull_points := bull_points + (bos_dir == "Bullish" ? 2 : 0)
+bull_points := bull_points + (rsi > 50 ? 1 : 0)
+bull_points := bull_points + (pd_zone == "Discount" ? 1 : 0)
+bull_points := bull_points + (ob_dir == "Bullish OB" ? 1 : 0)
+
+overall_bias = bull_points >= 5 ? "BULLISH" : bull_points <= 2 ? "BEARISH" : "NEUTRAL"
+
+// ── RSI Condition ─────────────────────────────────────────
+rsi_condition =
+  rsi > 70 ? "Overbought" :
+  rsi < 30 ? "Oversold"   :
+  rsi > 60 ? "Bullish"    :
+  rsi < 40 ? "Bearish"    : "Neutral"
+
+// ── Plot EMAs on chart ────────────────────────────────────
+plot(ema20,  "EMA 20",  color=color.new(color.yellow, 0),  linewidth=1)
+plot(ema50,  "EMA 50",  color=color.new(color.orange, 0),  linewidth=1)
+plot(ema200, "EMA 200", color=color.new(color.red,    0),  linewidth=2)
+
+// ── Alert Message (JSON) ──────────────────────────────────
+// This is what gets sent to your ARIA server webhook
+// Copy this EXACTLY into your TradingView alert message box
+
+alert_msg = '{'
+  + '"pair":"'      + syminfo.ticker       + '",'
+  + '"tf":"'        + timeframe.period     + '",'
+  + '"price":'      + str.tostring(close,  "#.#####") + ','
+  + '"open":'       + str.tostring(open,   "#.#####") + ','
+  + '"high":'       + str.tostring(high,   "#.#####") + ','
+  + '"low":'        + str.tostring(low,    "#.#####") + ','
+  + '"ema20":'      + str.tostring(ema20,  "#.#####") + ','
+  + '"ema50":'      + str.tostring(ema50,  "#.#####") + ','
+  + '"ema200":'     + str.tostring(ema200, "#.#####") + ','
+  + '"rsi":'        + str.tostring(rsi,    "#.##")    + ','
+  + '"rsi_cond":"'  + rsi_condition                   + '",'
+  + '"atr":'        + str.tostring(atr,    "#.#####") + ','
+  + '"bb_upper":'   + str.tostring(bb_upper,"#.#####") + ','
+  + '"bb_mid":'     + str.tostring(bb_mid,  "#.#####") + ','
+  + '"bb_lower":'   + str.tostring(bb_lower,"#.#####") + ','
+  + '"swing_high":' + str.tostring(swing_high,"#.#####") + ','
+  + '"swing_low":'  + str.tostring(swing_low, "#.#####") + ','
+  + '"h1_high":'    + str.tostring(h1_high,  "#.#####") + ','
+  + '"h1_low":'     + str.tostring(h1_low,   "#.#####") + ','
+  + '"h4_high":'    + str.tostring(h4_high,  "#.#####") + ','
+  + '"h4_low":'     + str.tostring(h4_low,   "#.#####") + ','
+  + '"bos":"'       + bos_dir   + '",'
+  + '"choch":"'     + choch     + '",'
+  + '"ob_dir":"'    + ob_dir    + '",'
+  + '"ob_high":'    + str.tostring(nz(ob_high, 0), "#.#####") + ','
+  + '"ob_low":'     + str.tostring(nz(ob_low,  0), "#.#####") + ','
+  + '"fvg_dir":"'   + fvg_dir   + '",'
+  + '"fvg_high":'   + str.tostring(nz(fvg_high, 0), "#.#####") + ','
+  + '"fvg_low":'    + str.tostring(nz(fvg_low,  0), "#.#####") + ','
+  + '"pd_zone":"'   + pd_zone       + '",'
+  + '"eq_level":'   + str.tostring(equilibrium, "#.#####") + ','
+  + '"phase":"'     + market_phase  + '",'
+  + '"bias":"'      + overall_bias  + '",'
+  + '"candle":"'    + candle_char   + '",'
+  + '"prev1":"'     + prev1_char    + '",'
+  + '"prev2":"'     + prev2_char    + '",'
+  + '"above_ema20":' + str.tostring(above_ema20)  + ','
+  + '"above_ema50":' + str.tostring(above_ema50)  + ','
+  + '"above_ema200":'+ str.tostring(above_ema200) + ','
+  + '"bull_score":' + str.tostring(bull_points)
+  + '}'
+
+// Fire alert on every bar close
+alertcondition(true, "ARIA SMC Feed", alert_msg)
