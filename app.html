@@ -4,30 +4,31 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>ARIA · Live SMC Terminal</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
 <style>
 /* ═══════════════════════════════════════════════
    DESIGN TOKENS
 ═══════════════════════════════════════════════ */
 :root {
-  --bg:          #0D0D0D;
-  --bg2:         #0D0D0D;
-  --card:        #141414;
-  --card2:       #1A1A1A;
-  --border:      #2A2A2A;
-  --border2:     #333333;
+  --bg:          #0A0A0F;
+  --bg2:         #0A0A0F;
+  --card:        #0F1117;
+  --card2:       #0F1117;
+  --border:      rgba(30, 58, 95, 0.5);
+  --border2:     rgba(30, 58, 95, 0.45);
   --orange:      #1A56DB;
   --orange-dim:  rgba(26,86,219,0.12);
   --orange-glow: rgba(26,86,219,0.35);
   --amber:       #3B82F6;
-  --cream:       #FFFFFF;
-  --muted:       #888888;
+  --cream:       #F1F5F9;
+  --muted:       #94A3B8;
   --faint:       rgba(255,255,255,0.1);
   --success:     #00C896;
   --danger:      #FF4757;
   --warn:        #FFB300;
-  --sf-display:  -apple-system, "SF Pro Display", "Helvetica Neue", sans-serif;
-  --sf-text:     -apple-system, "SF Pro Text", "Helvetica Neue", sans-serif;
+  --sf-display:  "Inter", -apple-system, system-ui, sans-serif;
+  --sf-text:     "Inter", -apple-system, system-ui, sans-serif;
   --sf-mono:     "SF Mono", "Menlo", "Monaco", monospace;
   --radius:      6px;
   --radius-sm:   4px;
@@ -41,7 +42,7 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
 html { scroll-behavior: smooth; }
 body {
-  font-family: var(--sf-text);
+  font-family: 'Inter', var(--sf-text), sans-serif;
   background: var(--bg);
   color: var(--cream);
   min-height: 100dvh;
@@ -79,10 +80,10 @@ body::before {
 ═══════════════════════════════════════════════ */
 .topbar {
   position: sticky; top: 0; z-index: 200;
-  background: rgba(13,13,13,0.96);
+  background: rgba(10,10,15,0.96);
   backdrop-filter: blur(20px) saturate(180%);
   -webkit-backdrop-filter: blur(20px) saturate(180%);
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid rgba(255,255,255,0.08);
   display: flex; align-items: center; justify-content: space-between;
   padding: 12px 20px;
   padding-top: max(12px, env(safe-area-inset-top));
@@ -98,7 +99,7 @@ body::before {
   border-radius: 3px;
   display: flex; align-items: center; justify-content: center;
   font-family: var(--sf-display);
-  font-weight: 800; font-size: 13px; color: #0D0D0D;
+  font-weight: 800; font-size: 13px; color: #0A0A0F;
   letter-spacing: -0.5px;
   box-shadow: 0 0 20px rgba(26,86,219,0.5);
   flex-shrink: 0;
@@ -118,7 +119,7 @@ body::before {
 
 .session-center {
   display: flex; align-items: center; gap: 7px;
-  background: #141414;
+  background: var(--card);
   border: 1px solid var(--border);
   border-radius: 4px;
   padding: 6px 14px;
@@ -162,7 +163,7 @@ body::before {
 .api-dot {
   position: absolute; top: -3px; right: -3px;
   width: 8px; height: 8px; border-radius: 50%;
-  background: var(--success); border: 2px solid #0D0D0D;
+  background: var(--success); border: 2px solid #0A0A0F;
   display: none;
 }
 .api-dot.show { display: block; }
@@ -276,7 +277,7 @@ body::before {
 .send {
   flex-shrink: 0; width: 38px; height: 38px;
   background: linear-gradient(135deg, #1A56DB, #3B82F6); border: none; border-radius: 10px;
-  cursor: pointer; color: #0D0D0D;
+  cursor: pointer; color: #0A0A0F;
   display: flex; align-items: center; justify-content: center;
   align-self: flex-end; margin-bottom: 3px;
   transition: opacity 0.2s, transform 0.15s;
@@ -878,10 +879,10 @@ select.j-input option { background: var(--card); }
 ═══════════════════════════════════════════════ */
 .bottom-nav {
   position: fixed; bottom: 0; left: 0; right: 0; z-index: 100;
-  background: rgba(13,13,13,0.97);
+  background: rgba(10,10,15,0.97);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
-  border-top: 1px solid var(--border);
+  border-top: 1px solid rgba(30, 58, 95, 0.5);
   display: flex;
   padding-bottom: max(12px, env(safe-area-inset-bottom));
 }
@@ -894,11 +895,14 @@ select.j-input option { background: var(--card); }
   -webkit-tap-highlight-color: transparent;
 }
 .nav-btn.active { color: var(--orange); }
+.nav-btn.active .nav-label { color: #1A56DB; }
 .nav-btn svg { width: 18px; height: 18px; }
 .nav-label {
-  font-family: var(--sf-text);
-  font-size: 8px;
-  letter-spacing: 0.04em;
+  font-family: 'Inter', var(--sf-text), sans-serif;
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: 0.03em;
+  color: #94A3B8;
   max-width: 64px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -917,19 +921,19 @@ select.j-input option { background: var(--card); }
 /* Trust strip (below topbar) */
 .aria-trust-top {
   max-width: 680px; margin: 0 auto;
-  padding: 6px 20px;
-  font-size: 11px; color: #666;
+  padding: 8px 20px;
+  font-size: 11px; color: var(--muted);
   text-align: center;
   letter-spacing: 0.02em;
-  border-bottom: 1px solid var(--border);
-  background: rgba(10,15,30,0.5);
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  background: rgba(10,10,15,0.9);
 }
 
 /* Social proof ticker */
 .social-proof-bar {
   height: 36px; overflow: hidden;
-  background: #0A0F1E;
-  border-bottom: 1px solid #1E3A5F;
+  background: #12121a;
+  border-bottom: 1px solid rgba(30, 58, 95, 0.5);
   position: relative;
 }
 .social-proof-inner {
@@ -938,10 +942,11 @@ select.j-input option { background: var(--card); }
   text-align: center;
 }
 .social-proof-msg {
-  font-family: var(--sf-text);
+  font-family: 'Inter', var(--sf-text), sans-serif;
   font-size: 12px;
-  color: #7EB6FF;
-  text-shadow: 0 0 20px rgba(59,130,246,0.25);
+  font-weight: 500;
+  color: #94A3B8;
+  text-shadow: none;
   opacity: 1;
   position: relative;
   left: auto; right: auto;
@@ -953,18 +958,18 @@ select.j-input option { background: var(--card); }
 .aria-stats-bar {
   display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px;
   max-width: 680px; margin: 0 auto; padding: 10px 16px 12px;
-  border-bottom: 1px solid var(--border);
-  background: rgba(13,13,13,0.98);
+  border-bottom: 1px solid rgba(30, 58, 95, 0.5);
+  background: #0A0A0F;
 }
 .aria-stat-card {
-  background: var(--card2);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  padding: 8px 6px;
+  background: #0F1117;
+  border: 1px solid rgba(30, 58, 95, 0.5);
+  border-radius: 12px;
+  padding: 10px 6px;
   text-align: center;
 }
-.aria-stat-num { font-family: var(--sf-display); font-size: 14px; font-weight: 800; color: #1A56DB; }
-.aria-stat-lbl { font-size: 9px; color: var(--muted); margin-top: 2px; text-transform: uppercase; letter-spacing: 0.06em; }
+.aria-stat-num { font-family: 'Inter', var(--sf-display), sans-serif; font-size: 14px; font-weight: 800; color: #1A56DB; }
+.aria-stat-lbl { font-family: 'Inter', var(--sf-text), sans-serif; font-size: 9px; font-weight: 500; color: #94A3B8; margin-top: 2px; text-transform: uppercase; letter-spacing: 0.06em; }
 
 .logo-beta {
   font-size: 10px; font-weight: 700; color: #fff;
@@ -1229,8 +1234,8 @@ i { color: var(--amber); font-style: italic; }
 /* Bottom nav gold active */
 .nav-btn.active svg { filter: drop-shadow(0 0 4px rgba(26,86,219,0.6)); }
 
-/* Section title gold dot */
-.card-title { color: #888888 !important; }
+/* Section title — landing secondary text */
+.card-title { color: #94A3B8 !important; }
 
 /* Input shell border radius sharp */
 .input-shell { border-radius: 4px !important; }
@@ -1244,10 +1249,10 @@ i { color: var(--amber); font-style: italic; }
 
 /* Journal add btn sharp */
 .journal-add-btn { border-radius: 4px !important; }
-.j-add { border-radius: 4px !important; color: #0D0D0D !important; }
+.j-add { border-radius: 4px !important; color: #0A0A0F !important; }
 
 /* Prop bar font */
-.prop-stat-label { color: #555555 !important; }
+.prop-stat-label { color: #64748b !important; }
 
 /* Active session badge glow */
 .session-center.live { 
@@ -1257,7 +1262,7 @@ i { color: var(--amber); font-style: italic; }
 /* Send button always gold */
 .send { 
   background: linear-gradient(135deg, #1A56DB, #3B82F6) !important; 
-  color: #0D0D0D !important;
+  color: #0A0A0F !important;
 }
 
 /* Quick chip hover gold */
@@ -1279,21 +1284,24 @@ i { color: var(--amber); font-style: italic; }
 /* ── LIVE PRICE STRIP ─────────────────────────────── */
 .price-strip {
   display: flex; align-items: stretch;
-  background: #0D0D0D;
-  border-bottom: 1px solid #2A2A2A;
+  gap: 10px;
+  padding: 10px 16px 12px;
+  background: #0A0A0F;
+  border-bottom: 1px solid rgba(30, 58, 95, 0.5);
   overflow-x: auto; scrollbar-width: none;
 }
 .price-strip::-webkit-scrollbar { display: none; }
 .price-item {
   flex: 1; min-width: 120px;
-  padding: 10px 16px;
-  border-right: 1px solid #2A2A2A;
+  padding: 12px 14px;
+  background: #0F1117;
+  border: 1px solid rgba(30, 58, 95, 0.5);
+  border-radius: 12px;
   cursor: default;
 }
-.price-item:last-child { border-right: none; }
 .price-pair {
   font-family: var(--sf-mono); font-size: 9px;
-  color: #555; letter-spacing: 0.12em; text-transform: uppercase;
+  color: #64748b; letter-spacing: 0.12em; text-transform: uppercase;
   margin-bottom: 3px;
   display: flex; align-items: center; gap: 5px;
 }
@@ -1304,6 +1312,11 @@ i { color: var(--amber); font-style: italic; }
   text-shadow: 0 0 10px rgba(0,200,150,0.35);
 }
 .price-src-dot.stale { color: #1A56DB; }
+.price-src-dot.delayed {
+  color: #FFB300;
+  animation: none;
+  text-shadow: 0 0 8px rgba(255,179,0,0.35);
+}
 .price-val {
   font-family: var(--sf-mono); font-size: 18px; font-weight: 600;
   color: var(--orange); letter-spacing: -0.5px;
@@ -1320,7 +1333,7 @@ i { color: var(--amber); font-style: italic; }
   white-space: nowrap;
 }
 .price-meta {
-  font-family: var(--sf-mono); font-size: 10px; color: #444;
+  font-family: var(--sf-mono); font-size: 10px; color: #64748b;
   margin-top: 2px;
 }
 .price-meta.bias-bull { color: #00C896; }
@@ -3629,6 +3642,25 @@ const PIP_SIZE = 0.0001;
 
 let lastPrices = { EURUSD: null, AUDUSD: null };
 
+function resolveAudPayloadFromLatest(data) {
+  if (!data || typeof data !== 'object') return null;
+  const raw =
+    data.AUDUSD ||
+    data.audusd ||
+    data['AUD/USD'] ||
+    data['AUDUSD'];
+  if (raw == null) return null;
+  if (typeof raw === 'object') return raw;
+  return null;
+}
+
+function audPriceIsFiniteFromPayload(payload) {
+  if (!payload || payload.price == null || payload.price === '') return false;
+  const rawP = payload.price;
+  const n = typeof rawP === 'number' ? rawP : parseFloat(String(rawP).replace(/,/g, ''));
+  return Number.isFinite(n);
+}
+
 async function fetchLivePrices() {
   try {
     const res = await fetch(`${ARIA_SERVER_URL}/latest`);
@@ -3636,29 +3668,47 @@ async function fetchLivePrices() {
     const data = await res.json();
 
     if (data.EURUSD) {
-      const price = parseFloat(data.EURUSD.price);
-      const last = lastPrices.EURUSD;
-      const pips = last ? ((price - last) * 10000).toFixed(1) : '0.0';
-      const dir = last ? (price > last ? '▲' : price < last ? '▼' : '—') : '—';
-      const dirColor = dir === '▲' ? '#00C896' : dir === '▼' ? '#FF4757' : '#888';
+      const rawEp = data.EURUSD.price;
+      const price =
+        typeof rawEp === 'number' ? rawEp : parseFloat(String(rawEp).replace(/,/g, ''));
+      if (Number.isFinite(price)) {
+        const last = lastPrices.EURUSD;
+        const pips = last ? ((price - last) * 10000).toFixed(1) : '0.0';
+        const dir = last ? (price > last ? '▲' : price < last ? '▼' : '—') : '—';
+        const dirColor = dir === '▲' ? '#00C896' : dir === '▼' ? '#FF4757' : '#888';
 
-      const ist = new Date(Date.now() + 19800000);
-      const t = `${String(ist.getUTCHours()).padStart(2,'0')}:${String(ist.getUTCMinutes()).padStart(2,'0')}:${String(ist.getUTCSeconds()).padStart(2,'0')}`;
+        const ist = new Date(Date.now() + 19800000);
+        const t = `${String(ist.getUTCHours()).padStart(2,'0')}:${String(ist.getUTCMinutes()).padStart(2,'0')}:${String(ist.getUTCSeconds()).padStart(2,'0')}`;
 
-      updateEURDisplay(price.toFixed(5), pips, dir, dirColor, t, data.EURUSD.bias);
-      lastPrices.EURUSD = price;
-      window.__liveEURUSD = price.toFixed(5);
-      window.__eurBias = data.EURUSD.bias;
-      window.__eurRSI = data.EURUSD.rsi;
+        updateEURDisplay(price.toFixed(5), pips, dir, dirColor, t, data.EURUSD.bias);
+        lastPrices.EURUSD = price;
+        window.__liveEURUSD = price.toFixed(5);
+        window.__eurBias = data.EURUSD.bias;
+        window.__eurRSI = data.EURUSD.rsi;
+      }
     }
 
-    const audPayload =
-      data.AUDUSD != null && typeof data.AUDUSD === 'object'
-        ? data.AUDUSD
-        : data.audusd != null && typeof data.audusd === 'object'
-          ? data.audusd
-          : null;
-    if (audPayload != null && audPayload.price != null && audPayload.price !== '') {
+    let audPayload = resolveAudPayloadFromLatest(data);
+    let audFeedKind = 'LIVE';
+
+    if (!audPriceIsFiniteFromPayload(audPayload)) {
+      audPayload = null;
+      try {
+        const ff = await fetch('https://api.frankfurter.app/latest?from=AUD&to=USD');
+        if (ff.ok) {
+          const ffj = await ff.json();
+          const rate = ffj.rates && ffj.rates.USD;
+          if (typeof rate === 'number' && Number.isFinite(rate)) {
+            audPayload = { price: rate, bias: null, rsi: null };
+            audFeedKind = 'DELAYED';
+          }
+        }
+      } catch (_ffErr) {
+        /* no fallback */
+      }
+    }
+
+    if (audPayload && audPriceIsFiniteFromPayload(audPayload)) {
       const rawP = audPayload.price;
       const price =
         typeof rawP === 'number' ? rawP : parseFloat(String(rawP).replace(/,/g, ''));
@@ -3671,11 +3721,12 @@ async function fetchLivePrices() {
         const ist = new Date(Date.now() + 19800000);
         const t = `${String(ist.getUTCHours()).padStart(2, '0')}:${String(ist.getUTCMinutes()).padStart(2, '0')}:${String(ist.getUTCSeconds()).padStart(2, '0')}`;
 
-        updateAUDDisplay(price.toFixed(5), pips, dir, dirColor, t, audPayload.bias);
+        updateAUDDisplay(price.toFixed(5), pips, dir, dirColor, t, audPayload.bias, audFeedKind);
         lastPrices.AUDUSD = price;
         window.__liveAUDUSD = price.toFixed(5);
         window.__audBias = audPayload.bias;
         window.__audRSI = audPayload.rsi;
+        window.__audFeedKind = audFeedKind;
       }
     }
 
@@ -3729,7 +3780,13 @@ function updateEURDisplay(price, pips, dir, dirColor, time, bias) {
   });
 }
 
-function updateAUDDisplay(price, pips, dir, dirColor, time, bias) {
+function updateAUDDisplay(price, pips, dir, dirColor, time, bias, feedKind) {
+  feedKind = (feedKind || 'LIVE').toUpperCase() === 'DELAYED' ? 'DELAYED' : 'LIVE';
+  const isLive = feedKind === 'LIVE';
+  const dotClass = isLive ? 'live' : 'delayed';
+  const statusColor = isLive ? '#00C896' : '#FFB300';
+  const statusWord = isLive ? 'LIVE' : 'DELAYED';
+
   const audRoot = document.getElementById('pi-AUDUSD');
   if (audRoot) {
     audRoot.querySelectorAll('*').forEach(function (el) {
@@ -3746,10 +3803,10 @@ function updateAUDDisplay(price, pips, dir, dirColor, time, bias) {
   const audCard = document.getElementById('pi-AUDUSD');
   if (audCard) {
     audCard.innerHTML = `
-      <div class="price-pair">AUD/USD <span class="price-src-dot live">●</span></div>
+      <div class="price-pair">AUD/USD <span class="price-src-dot ${dotClass}">●</span></div>
       <div class="price-val">${price}</div>
       <div class="price-meta" style="color:${dirColor}">${dir} ${Math.abs(pips)} pips</div>
-      <div class="price-meta" style="font-size:10px;color:#00C896;margin-top:2px">● LIVE · Updated ${time} IST${bias ? ` · ${bias}` : ''}</div>
+      <div class="price-meta" style="font-size:10px;color:${statusColor};margin-top:2px">● ${statusWord} · Updated ${time} IST${bias ? ` · ${bias}` : ''}</div>
     `;
   }
 
@@ -3760,10 +3817,13 @@ function updateAUDDisplay(price, pips, dir, dirColor, time, bias) {
     }
   });
 
-  const liveElsAud = document.querySelectorAll('[class*="live"], [class*="Live"], [class*="LIVE"]');
+  const statusHtml = isLive
+    ? `<span style="color:#00C896">● LIVE</span>`
+    : `<span style="color:#FFB300">● DELAYED</span>`;
+  const liveElsAud = document.querySelectorAll('[class*="live"], [class*="Live"], [class*="LIVE"], [class*="delayed"]');
   liveElsAud.forEach(function (el) {
     if (el.closest('#pi-AUDUSD')) {
-      el.innerHTML = `<span style="color:#00C896">● LIVE</span> · Updated ${time} IST`;
+      el.innerHTML = `${statusHtml} · Updated ${time} IST`;
     }
   });
 }
