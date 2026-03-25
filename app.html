@@ -1,0 +1,3804 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>ARIA · Live SMC Terminal</title>
+<script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+<style>
+/* ═══════════════════════════════════════════════
+   DESIGN TOKENS
+═══════════════════════════════════════════════ */
+:root {
+  --bg:          #0D0D0D;
+  --bg2:         #0D0D0D;
+  --card:        #141414;
+  --card2:       #1A1A1A;
+  --border:      #2A2A2A;
+  --border2:     #333333;
+  --orange:      #1A56DB;
+  --orange-dim:  rgba(26,86,219,0.12);
+  --orange-glow: rgba(26,86,219,0.35);
+  --amber:       #3B82F6;
+  --cream:       #FFFFFF;
+  --muted:       #888888;
+  --faint:       rgba(255,255,255,0.1);
+  --success:     #00C896;
+  --danger:      #FF4757;
+  --warn:        #FFB300;
+  --sf-display:  -apple-system, "SF Pro Display", "Helvetica Neue", sans-serif;
+  --sf-text:     -apple-system, "SF Pro Text", "Helvetica Neue", sans-serif;
+  --sf-mono:     "SF Mono", "Menlo", "Monaco", monospace;
+  --radius:      6px;
+  --radius-sm:   4px;
+  --shadow:      0 2px 16px rgba(0,0,0,0.5);
+  --shadow-lg:   0 8px 40px rgba(0,0,0,0.7);
+}
+
+/* ═══════════════════════════════════════════════
+   RESET & BASE
+═══════════════════════════════════════════════ */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+html { scroll-behavior: smooth; }
+body {
+  font-family: var(--sf-text);
+  background: var(--bg);
+  color: var(--cream);
+  min-height: 100dvh;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* subtle warm radial */
+body::before {
+  content: '';
+  position: fixed; top: 0; left: 0; right: 0; height: 400px;
+  background: radial-gradient(ellipse 60% 200px at 50% -60px, rgba(26,86,219,0.08), transparent);
+  pointer-events: none; z-index: 0;
+}
+
+/* ═══════════════════════════════════════════════
+   SCROLLBAR
+═══════════════════════════════════════════════ */
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+
+/* ═══════════════════════════════════════════════
+   LAYOUT WRAPPER
+═══════════════════════════════════════════════ */
+.app {
+  position: relative; z-index: 1;
+  max-width: 680px;
+  margin: 0 auto;
+  padding: 0 0 120px; /* space for bottom nav */
+}
+
+/* ═══════════════════════════════════════════════
+   TOP BAR
+═══════════════════════════════════════════════ */
+.topbar {
+  position: sticky; top: 0; z-index: 200;
+  background: rgba(13,13,13,0.96);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 20px;
+  padding-top: max(12px, env(safe-area-inset-top));
+}
+
+.logo {
+  display: flex; align-items: center; gap: 8px;
+  text-decoration: none;
+}
+.logo-mark {
+  width: 28px; height: 28px;
+  background: linear-gradient(135deg, #1A56DB, #3B82F6);
+  border-radius: 3px;
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--sf-display);
+  font-weight: 800; font-size: 13px; color: #0D0D0D;
+  letter-spacing: -0.5px;
+  box-shadow: 0 0 20px rgba(26,86,219,0.5);
+  flex-shrink: 0;
+}
+.logo-text {
+  font-family: var(--sf-display);
+  font-weight: 700; font-size: 17px;
+  letter-spacing: 0.04em;
+  background: linear-gradient(135deg, #FFFFFF, var(--amber));
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+}
+.logo-sub {
+  font-size: 10px; color: var(--muted); letter-spacing: 0.08em;
+  text-transform: uppercase; font-family: var(--sf-mono);
+  display: none;
+}
+
+.session-center {
+  display: flex; align-items: center; gap: 7px;
+  background: #141414;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 6px 14px;
+  cursor: default;
+  transition: border-color 0.3s;
+}
+.session-center.live { border-color: rgba(26,86,219,0.6); box-shadow: 0 0 16px rgba(26,86,219,0.2); }
+
+.session-pip {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--muted); flex-shrink: 0;
+  transition: background 0.4s, box-shadow 0.4s;
+}
+.session-pip.on { background: #1A56DB; box-shadow: 0 0 8px #1A56DB; animation: pip 2.5s infinite; }
+.session-pip.warn { background: #1A56DB; box-shadow: 0 0 8px #1A56DB; animation: pip 2.5s infinite; }
+
+@keyframes pip { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+.session-label {
+  font-family: var(--sf-mono);
+  font-size: 11px; font-weight: 600;
+  color: var(--cream); letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+.session-time-badge {
+  font-family: var(--sf-mono);
+  font-size: 10px; color: var(--muted);
+}
+
+.gear-btn {
+  width: 34px; height: 34px;
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  cursor: pointer; color: var(--muted);
+  display: flex; align-items: center; justify-content: center;
+  transition: all 0.2s; position: relative; flex-shrink: 0;
+}
+.gear-btn:hover { border-color: var(--orange); color: var(--orange); background: var(--orange-dim); border-radius: 4px; }
+.gear-btn svg { width: 15px; height: 15px; }
+
+.api-dot {
+  position: absolute; top: -3px; right: -3px;
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--success); border: 2px solid #0D0D0D;
+  display: none;
+}
+.api-dot.show { display: block; }
+
+/* ═══════════════════════════════════════════════
+   PROP FIRM BAR
+═══════════════════════════════════════════════ */
+.prop-bar {
+  display: flex; align-items: stretch;
+  background: var(--card);
+  border-bottom: 1px solid var(--border);
+  overflow-x: auto; scrollbar-width: none;
+}
+.prop-bar::-webkit-scrollbar { display: none; }
+
+.prop-stat {
+  flex: 1; min-width: 90px;
+  padding: 10px 14px;
+  display: flex; flex-direction: column; gap: 2px;
+  border-right: 1px solid var(--border);
+  cursor: pointer; transition: background 0.15s;
+  position: relative;
+}
+.prop-stat:last-child { border-right: none; }
+.prop-stat:hover { background: var(--card2); }
+.prop-stat:active { background: var(--border); }
+
+.prop-stat-label {
+  font-family: var(--sf-mono);
+  font-size: 9px; color: var(--muted);
+  letter-spacing: 0.1em; text-transform: uppercase;
+}
+.prop-stat-value {
+  font-family: var(--sf-mono);
+  font-size: 14px; font-weight: 600;
+  color: var(--cream); letter-spacing: -0.3px;
+}
+.prop-stat-value.pos { color: var(--success); }
+.prop-stat-value.neg { color: var(--danger); }
+.prop-stat-value.warn { color: var(--warn); }
+
+/* ═══════════════════════════════════════════════
+   PAGE SECTIONS
+═══════════════════════════════════════════════ */
+.section {
+  margin: 16px 16px 0;
+  animation: fadeUp 0.4s ease both;
+}
+
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.card-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 16px 12px;
+  border-bottom: 1px solid var(--border);
+}
+.card-title {
+  font-family: var(--sf-display);
+  font-size: 12px; font-weight: 600;
+  color: var(--muted); letter-spacing: 0.1em; text-transform: uppercase;
+}
+.card-badge {
+  font-family: var(--sf-mono);
+  font-size: 10px; padding: 3px 8px;
+  background: rgba(26,86,219,0.1); color: var(--orange);
+  border: 1px solid rgba(26,86,219,0.3);
+  border-radius: 3px; letter-spacing: 0.06em; text-transform: uppercase;
+}
+
+/* ═══════════════════════════════════════════════
+   CHAT INPUT
+═══════════════════════════════════════════════ */
+.chat-wrap {
+  padding: 16px;
+}
+
+.input-shell {
+  background: var(--card2);
+  border: 1.5px solid var(--border2);
+  border-radius: var(--radius);
+  padding: 4px 6px 4px 16px;
+  display: flex; align-items: flex-end; gap: 8px;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  box-shadow: var(--shadow);
+}
+.input-shell:focus-within {
+  border-color: rgba(26,86,219,0.6);
+  box-shadow: 0 0 0 3px rgba(26,86,219,0.08), var(--shadow);
+}
+
+.chat-ta {
+  flex: 1; background: transparent; border: none; outline: none;
+  color: var(--cream); font-family: var(--sf-text);
+  font-size: 15px; line-height: 1.5; resize: none;
+  padding: 11px 0; max-height: 120px;
+  overflow-y: auto; scrollbar-width: none;
+}
+.chat-ta::-webkit-scrollbar { display: none; }
+.chat-ta::placeholder { color: var(--muted); }
+
+.send {
+  flex-shrink: 0; width: 38px; height: 38px;
+  background: linear-gradient(135deg, #1A56DB, #3B82F6); border: none; border-radius: 10px;
+  cursor: pointer; color: #0D0D0D;
+  display: flex; align-items: center; justify-content: center;
+  align-self: flex-end; margin-bottom: 3px;
+  transition: opacity 0.2s, transform 0.15s;
+  box-shadow: 0 2px 12px rgba(26,86,219,0.35);
+}
+.send:hover:not(:disabled) { opacity: 0.88; transform: scale(1.05); }
+.send:active:not(:disabled) { transform: scale(0.95); }
+.send:disabled { opacity: 0.3; cursor: not-allowed; box-shadow: none; }
+.send svg { width: 16px; height: 16px; }
+
+/* Quick chips */
+.chips {
+  display: flex; flex-wrap: wrap; gap: 7px;
+  padding: 0 16px 16px;
+}
+.chip {
+  background: transparent;
+  border: 1px solid var(--border2);
+  border-radius: 4px;
+  padding: 7px 14px;
+  font-family: var(--sf-text);
+  font-size: 13px; color: var(--muted);
+  cursor: pointer;
+  transition: all 0.18s;
+  white-space: nowrap;
+}
+.chip:hover { border-color: var(--orange); color: var(--cream); background: var(--orange-dim); border-radius: 4px; }
+.chip:active { transform: scale(0.97); }
+
+/* ═══════════════════════════════════════════════
+   CHAT MESSAGES
+═══════════════════════════════════════════════ */
+.messages {
+  padding: 0 16px;
+  display: flex; flex-direction: column; gap: 12px;
+  min-height: 20px;
+}
+
+.msg-in { animation: msgIn 0.3s cubic-bezier(0.4,0,0.2,1) both; }
+@keyframes msgIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.msg-u { display: flex; justify-content: flex-end; }
+.msg-u-bubble {
+  background: var(--card2); border: 1px solid var(--border2);
+  border-radius: 16px 16px 4px 16px;
+  padding: 10px 15px; max-width: 82%;
+  font-size: 14px; color: var(--cream); line-height: 1.5;
+  font-family: var(--sf-text);
+}
+
+.msg-a { display: flex; align-items: flex-start; gap: 10px; }
+.msg-a-dot {
+  width: 28px; height: 28px; border-radius: 50%; flex-shrink: 0;
+  background: linear-gradient(135deg, #1A56DB, #3B82F6);
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--sf-display); font-weight: 800; font-size: 11px;
+  color: #FFFFFF; box-shadow: 0 0 12px rgba(26,86,219,0.4);
+  margin-top: 2px;
+}
+.msg-a-body {
+  flex: 1;
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: 4px 16px 16px 16px;
+  padding: 12px 15px;
+  font-size: 14px; color: var(--cream); line-height: 1.6;
+  font-family: var(--sf-text);
+  max-width: calc(100% - 38px);
+}
+
+/* Response formatting */
+.r-section {
+  font-family: var(--sf-mono); font-size: 10px;
+  letter-spacing: 0.12em; text-transform: uppercase;
+  color: var(--orange); margin: 14px 0 6px;
+  padding-bottom: 4px; border-bottom: 1px solid var(--border);
+}
+.r-section:first-child { margin-top: 0; }
+.r-row {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 4px 0; border-bottom: 1px solid rgba(61,46,24,0.5);
+  font-size: 13px;
+}
+.r-row:last-child { border: none; }
+.r-k { color: var(--muted); font-family: var(--sf-mono); font-size: 12px; }
+.r-v { font-family: var(--sf-mono); font-size: 12px; font-weight: 500; color: var(--cream); }
+.r-v.buy  { color: var(--success); }
+.r-v.sell { color: var(--danger); }
+.r-v.warn { color: var(--warn); }
+
+.inline-tag {
+  display: inline-block; padding: 2px 7px; border-radius: 5px;
+  font-family: var(--sf-mono); font-size: 10px; font-weight: 600;
+  letter-spacing: 0.04em;
+}
+.t-buy  { background: rgba(76,175,80,0.15);  color: var(--success); }
+.t-sell { background: rgba(255,68,68,0.15);  color: var(--danger); }
+.t-warn { background: rgba(26,86,219,0.15); color: var(--warn); }
+.t-info { background: var(--orange-dim);     color: var(--orange); }
+.t-skip { background: rgba(168,152,128,0.15); color: var(--muted); }
+
+/* Thinking */
+.thinking {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 15px;
+  font-family: var(--sf-mono); font-size: 12px; color: var(--muted);
+}
+.thr-dots { display: flex; gap: 5px; }
+.thr-d {
+  width: 5px; height: 5px; border-radius: 50%; background: var(--orange);
+  animation: thr 1.4s infinite; opacity: 0.4;
+}
+.thr-d:nth-child(2) { animation-delay: 0.2s; }
+.thr-d:nth-child(3) { animation-delay: 0.4s; }
+@keyframes thr { 0%,80%,100%{opacity:0.2;transform:scale(0.8)} 40%{opacity:1;transform:scale(1)} }
+
+/* ═══════════════════════════════════════════════
+   CALCULATOR
+═══════════════════════════════════════════════ */
+.calc-body { padding: 16px; }
+.calc-price-row {
+  display: flex; gap: 8px; margin-bottom: 14px;
+}
+.calc-field {
+  flex: 1; background: var(--card2); border: 1px solid var(--border2);
+  border-radius: var(--radius-sm); padding: 10px 12px;
+  color: var(--cream); font-family: var(--sf-mono);
+  font-size: 14px; outline: none;
+  transition: border-color 0.2s;
+}
+.calc-field:focus { border-color: rgba(26,86,219,0.6); }
+.calc-field::placeholder { color: var(--muted); font-size: 12px; }
+
+.calc-results {
+  background: var(--card2); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); padding: 12px 14px;
+  margin-bottom: 14px;
+  display: none;
+}
+.calc-results.show { display: block; }
+
+.calc-grid {
+  display: grid; grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.calc-item { display: flex; flex-direction: column; gap: 2px; }
+.calc-label {
+  font-family: var(--sf-mono); font-size: 9px;
+  color: var(--muted); text-transform: uppercase; letter-spacing: 0.1em;
+}
+.calc-val {
+  font-family: var(--sf-mono); font-size: 15px; font-weight: 600;
+  color: var(--cream);
+}
+.calc-val.pos { color: var(--success); }
+.calc-val.neg { color: var(--danger); }
+.calc-val.info { color: var(--orange); }
+.calc-val.warn { color: var(--warn); }
+
+.calc-close {
+  font-family: var(--sf-mono); font-size: 11px;
+  color: var(--muted); margin-top: 10px; padding-top: 10px;
+  border-top: 1px solid var(--border);
+  display: flex; align-items: center; gap: 6px;
+}
+.calc-close span { color: var(--warn); }
+
+.calc-actions { display: flex; gap: 10px; }
+.btn-take {
+  flex: 1; padding: 13px;
+  background: linear-gradient(135deg, var(--orange), var(--amber));
+  border: none; border-radius: var(--radius-sm);
+  color: #0D0D0D; font-family: var(--sf-display);
+  font-size: 14px; font-weight: 700; cursor: pointer;
+  box-shadow: 0 4px 20px rgba(26,86,219,0.3);
+  transition: opacity 0.2s, transform 0.15s;
+}
+.btn-take:hover { opacity: 0.9; transform: scale(1.01); }
+.btn-take:active { transform: scale(0.98); }
+.btn-skip {
+  padding: 13px 20px;
+  background: var(--card2); border: 1px solid var(--border2);
+  border-radius: var(--radius-sm); color: var(--muted);
+  font-family: var(--sf-text); font-size: 14px;
+  cursor: pointer; transition: all 0.2s;
+}
+.btn-skip:hover { border-color: var(--danger); color: var(--danger); }
+
+/* ═══════════════════════════════════════════════
+   TIMER
+═══════════════════════════════════════════════ */
+.timer-body { padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+
+.timer-display {
+  text-align: center;
+  padding: 20px;
+  background: var(--card2); border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+.timer-num {
+  font-family: var(--sf-mono); font-size: 42px; font-weight: 600;
+  letter-spacing: -2px; color: var(--cream);
+  transition: color 0.5s;
+}
+.timer-num.warn { color: var(--warn); }
+.timer-num.expired { color: var(--danger); }
+.timer-sub {
+  font-family: var(--sf-mono); font-size: 11px;
+  color: var(--muted); margin-top: 4px; letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.timer-btns { display: flex; gap: 10px; }
+.btn-timer-start {
+  flex: 1; padding: 14px;
+  background: var(--card2); border: 1px solid var(--border2);
+  border-radius: var(--radius-sm); color: var(--cream);
+  font-family: var(--sf-display); font-size: 14px; font-weight: 600;
+  cursor: pointer; transition: all 0.2s;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+}
+.btn-timer-start:hover { border-color: var(--orange); background: var(--orange-dim); }
+.btn-timer-start.running { border-color: var(--orange); color: var(--orange); }
+
+.btn-timer-reset {
+  padding: 14px 18px;
+  background: var(--card2); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); color: var(--muted);
+  font-family: var(--sf-text); font-size: 14px;
+  cursor: pointer; transition: all 0.2s;
+}
+.btn-timer-reset:hover { border-color: var(--danger); color: var(--danger); }
+
+/* ═══════════════════════════════════════════════
+   NEWS FEED
+═══════════════════════════════════════════════ */
+.news-body { padding: 8px 0; }
+.news-item {
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  transition: background 0.15s;
+}
+.news-item:last-child { border-bottom: none; }
+.news-item:hover { background: var(--card2); }
+
+.news-impact {
+  width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+}
+.news-impact.high   { background: var(--danger); box-shadow: 0 0 8px var(--danger); }
+.news-impact.medium { background: var(--warn); box-shadow: 0 0 8px var(--warn); }
+.news-impact.low    { background: var(--success); box-shadow: 0 0 8px var(--success); }
+
+.news-info { flex: 1; min-width: 0; }
+.news-title {
+  font-family: var(--sf-text); font-size: 13px; font-weight: 500;
+  color: var(--cream); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.news-meta {
+  font-family: var(--sf-mono); font-size: 10px; color: var(--muted);
+  margin-top: 2px;
+}
+
+.news-right { text-align: right; flex-shrink: 0; }
+.news-countdown {
+  font-family: var(--sf-mono); font-size: 11px; font-weight: 600;
+}
+.news-countdown.soon { color: var(--danger); }
+.news-countdown.near { color: var(--warn); }
+.news-countdown.far  { color: var(--muted); }
+
+.news-warn-bar {
+  margin: 0 16px 8px;
+  padding: 9px 13px;
+  background: rgba(255,68,68,0.1);
+  border: 1px solid rgba(255,68,68,0.25);
+  border-radius: var(--radius-sm);
+  font-family: var(--sf-mono); font-size: 11px; color: var(--danger);
+  display: none; align-items: center; gap: 7px;
+}
+.news-warn-bar.show { display: flex; }
+
+.news-empty {
+  padding: 24px 16px; text-align: center;
+  font-family: var(--sf-mono); font-size: 12px; color: var(--muted);
+}
+
+/* ═══════════════════════════════════════════════
+   SIGNAL LOG
+═══════════════════════════════════════════════ */
+.signal-body { padding: 0; }
+.signal-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 11px 16px; border-bottom: 1px solid var(--border);
+  transition: background 0.15s;
+}
+.signal-row:last-child { border-bottom: none; }
+.signal-row:hover { background: var(--card2); }
+
+.sig-pair {
+  font-family: var(--sf-mono); font-size: 13px; font-weight: 600;
+  color: var(--cream); min-width: 60px;
+}
+.sig-dir {
+  font-family: var(--sf-mono); font-size: 11px; font-weight: 600;
+  padding: 2px 8px; border-radius: 5px; min-width: 44px; text-align: center;
+}
+.sig-dir.buy  { background: rgba(76,175,80,0.15);  color: var(--success); }
+.sig-dir.sell { background: rgba(255,68,68,0.15);  color: var(--danger); }
+.sig-dir.skip { background: rgba(168,152,128,0.15); color: var(--muted); }
+
+.sig-conf {
+  font-family: var(--sf-mono); font-size: 12px;
+  color: var(--muted); flex: 1;
+}
+.sig-time {
+  font-family: var(--sf-mono); font-size: 11px; color: var(--muted);
+  min-width: 42px; text-align: right;
+}
+.sig-result { font-size: 14px; margin-left: 4px; }
+
+.signal-empty {
+  padding: 24px 16px; text-align: center;
+  font-family: var(--sf-mono); font-size: 12px; color: var(--muted);
+}
+
+/* ═══════════════════════════════════════════════
+   TRADE JOURNAL
+═══════════════════════════════════════════════ */
+.journal-body { padding: 14px 16px; }
+
+.journal-add-btn {
+  width: 100%; padding: 13px;
+  background: var(--card2); border: 1px solid var(--orange);
+  border-radius: var(--radius-sm); color: var(--orange);
+  font-family: var(--sf-display); font-size: 14px; font-weight: 600;
+  cursor: pointer; transition: all 0.2s;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  margin-bottom: 14px;
+}
+.journal-add-btn:hover { background: var(--orange-dim); }
+
+.journal-add-form {
+  background: var(--card2); border: 1px solid var(--border2);
+  border-radius: var(--radius-sm); padding: 14px;
+  margin-bottom: 14px; display: none;
+}
+.journal-add-form.show { display: block; }
+.journal-form-row {
+  display: grid; grid-template-columns: 1fr 1fr 1fr;
+  gap: 8px; margin-bottom: 8px;
+}
+.journal-form-row2 {
+  display: grid; grid-template-columns: 1fr 1fr 1fr auto;
+  gap: 8px;
+}
+.j-input {
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); padding: 9px 11px;
+  color: var(--cream); font-family: var(--sf-mono);
+  font-size: 13px; outline: none;
+  transition: border-color 0.2s;
+}
+.j-input:focus { border-color: rgba(26,86,219,0.6); }
+.j-input::placeholder { color: var(--muted); }
+select.j-input option { background: var(--card); }
+
+.j-add {
+  padding: 9px 16px;
+  background: linear-gradient(135deg, #1A56DB, #3B82F6); border: none;
+  border-radius: var(--radius-sm); color: #0D0D0D;
+  font-family: var(--sf-display); font-size: 13px; font-weight: 700;
+  cursor: pointer; white-space: nowrap;
+  transition: opacity 0.2s;
+}
+.j-add:hover { opacity: 0.88; }
+
+.journal-stats {
+  display: grid; grid-template-columns: 1fr 1fr 1fr;
+  gap: 10px; margin-bottom: 14px;
+}
+.jstat {
+  background: var(--card2); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); padding: 10px 12px; text-align: center;
+}
+.jstat-label { font-family: var(--sf-mono); font-size: 9px; color: var(--muted); letter-spacing: 0.1em; text-transform: uppercase; }
+.jstat-val { font-family: var(--sf-mono); font-size: 16px; font-weight: 600; color: var(--cream); margin-top: 2px; }
+.jstat-val.pos { color: var(--success); }
+.jstat-val.neg { color: var(--danger); }
+
+.journal-list { overflow-x: auto; }
+.journal-table {
+  width: 100%; border-collapse: collapse;
+  font-family: var(--sf-mono); font-size: 12px;
+  min-width: 400px;
+}
+.journal-table th {
+  font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--muted); padding: 7px 10px; text-align: left;
+  border-bottom: 1px solid var(--border); font-weight: 500;
+}
+.journal-table td {
+  padding: 9px 10px; border-bottom: 1px solid rgba(61,46,24,0.5);
+  color: var(--muted);
+}
+.journal-table tr:hover td { background: var(--card2); }
+.journal-table tr:last-child td { border: none; }
+.j-del {
+  background: none; border: none; color: var(--muted);
+  cursor: pointer; font-size: 14px; padding: 2px 6px;
+  border-radius: 4px; transition: all 0.2s;
+}
+.j-del:hover { background: rgba(255,68,68,0.1); color: var(--danger); }
+
+.journal-empty {
+  text-align: center; padding: 24px;
+  font-family: var(--sf-mono); font-size: 12px; color: var(--muted);
+}
+
+/* ═══════════════════════════════════════════════
+   RISK SCORE WIDGET
+═══════════════════════════════════════════════ */
+.risk-body { padding: 16px; }
+
+.risk-score-display {
+  display: flex; align-items: center; gap: 16px; margin-bottom: 16px;
+}
+.risk-circle {
+  width: 70px; height: 70px; flex-shrink: 0;
+  border-radius: 50%;
+  background: conic-gradient(var(--orange) 0%, var(--orange) 0deg, var(--border) 0deg);
+  display: flex; align-items: center; justify-content: center;
+  position: relative;
+}
+.risk-circle::before {
+  content: ''; position: absolute;
+  width: 54px; height: 54px; border-radius: 50%;
+  background: var(--card);
+}
+.risk-num {
+  position: relative; z-index: 1;
+  font-family: var(--sf-mono); font-size: 22px; font-weight: 700;
+  color: var(--cream);
+}
+.risk-desc { flex: 1; }
+.risk-score-label {
+  font-family: var(--sf-display); font-size: 17px; font-weight: 600;
+  color: var(--cream); margin-bottom: 3px;
+}
+.risk-score-sub {
+  font-family: var(--sf-text); font-size: 13px; color: var(--muted); line-height: 1.4;
+}
+
+.risk-checks { display: flex; flex-direction: column; gap: 8px; }
+.risk-check {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 9px 12px;
+  background: var(--card2); border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+}
+.risk-check-label { font-family: var(--sf-text); font-size: 13px; color: var(--muted); }
+.risk-check-status {
+  font-family: var(--sf-mono); font-size: 11px; font-weight: 600;
+  padding: 2px 8px; border-radius: 5px;
+}
+.rcs-ok   { background: rgba(76,175,80,0.15);  color: var(--success); }
+.rcs-warn { background: rgba(26,86,219,0.15);  color: var(--warn); }
+.rcs-bad  { background: rgba(255,68,68,0.15);   color: var(--danger); }
+
+/* ═══════════════════════════════════════════════
+   MODAL (Settings)
+═══════════════════════════════════════════════ */
+.modal-overlay {
+  position: fixed; inset: 0;
+  background: rgba(10,7,2,0.8);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  z-index: 500; display: flex; align-items: flex-end;
+  opacity: 0; pointer-events: none;
+  transition: opacity 0.25s;
+}
+.modal-overlay.open { opacity: 1; pointer-events: all; }
+
+.modal {
+  width: 100%; max-height: 90dvh;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px 10px 0 0;
+  overflow-y: auto; padding: 24px 20px 32px;
+  transform: translateY(30px);
+  transition: transform 0.3s cubic-bezier(0.4,0,0.2,1);
+  padding-bottom: max(32px, env(safe-area-inset-bottom));
+}
+.modal-overlay.open .modal { transform: translateY(0); }
+
+.modal-handle {
+  width: 36px; height: 4px; border-radius: 2px;
+  background: var(--border2); margin: 0 auto 20px;
+}
+
+.modal-title {
+  font-family: var(--sf-display); font-size: 20px; font-weight: 700;
+  color: var(--cream); margin-bottom: 20px;
+}
+
+.modal-label {
+  font-family: var(--sf-mono); font-size: 10px;
+  color: var(--muted); letter-spacing: 0.12em; text-transform: uppercase;
+  margin-bottom: 7px;
+}
+
+.modal-input {
+  width: 100%; background: var(--card2);
+  border: 1px solid var(--border2); border-radius: var(--radius-sm);
+  padding: 12px 14px; color: var(--cream);
+  font-family: var(--sf-mono); font-size: 14px; outline: none;
+  transition: border-color 0.2s; margin-bottom: 16px;
+}
+.modal-input:focus { border-color: rgba(26,86,219,0.7); }
+.modal-input::placeholder { color: var(--muted); }
+
+.modal-btn {
+  width: 100%; padding: 14px;
+  background: linear-gradient(135deg, #1A56DB, #3B82F6);
+  border: none; border-radius: var(--radius-sm);
+  color: #0D0D0D; font-family: var(--sf-display);
+  font-size: 15px; font-weight: 700; cursor: pointer;
+  box-shadow: 0 4px 20px rgba(26,86,219,0.35);
+  transition: opacity 0.2s; margin-bottom: 12px;
+}
+.modal-btn:hover { opacity: 0.88; }
+
+.modal-sep { border: none; border-top: 1px solid var(--border); margin: 20px 0; }
+
+.modal-prop-grid {
+  display: grid; grid-template-columns: 1fr 1fr;
+  gap: 12px; margin-bottom: 14px;
+}
+
+.modal-sub-btn {
+  width: 100%; padding: 13px;
+  background: var(--card2); border: 1px solid var(--border2);
+  border-radius: var(--radius-sm); color: var(--muted);
+  font-family: var(--sf-text); font-size: 14px;
+  cursor: pointer; transition: all 0.2s;
+}
+.modal-sub-btn:hover { border-color: var(--orange); color: var(--cream); }
+
+.modal-user-card {
+  margin-bottom: 14px;
+  padding: 12px;
+  background: var(--card2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.modal-user-email {
+  font-family: var(--sf-mono);
+  font-size: 12px;
+  color: var(--cream);
+  margin-bottom: 8px;
+  word-break: break-all;
+}
+
+.modal-upgrade-btn {
+  width: 100%;
+  padding: 13px;
+  background: #1A56DB;
+  border: 1px solid #1E429F;
+  border-radius: var(--radius-sm);
+  color: #FFFFFF;
+  font-family: var(--sf-text);
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s;
+  margin-bottom: 8px;
+}
+.modal-upgrade-btn:hover { background: #1E429F; border-color: #1E429F; }
+
+.modal-hint {
+  font-family: var(--sf-text); font-size: 12px;
+  color: var(--muted); line-height: 1.5; margin-top: 12px;
+  padding: 10px 12px; background: var(--card2);
+  border-radius: var(--radius-sm); border: 1px solid var(--border);
+}
+
+.api-status-msg {
+  font-family: var(--sf-mono); font-size: 12px;
+  padding: 9px 12px; border-radius: var(--radius-sm);
+  margin-bottom: 12px; display: none;
+}
+.api-status-msg.ok  { background: rgba(76,175,80,0.12); color: var(--success); border: 1px solid rgba(76,175,80,0.3); }
+.api-status-msg.err { background: rgba(255,68,68,0.12); color: var(--danger);  border: 1px solid rgba(255,68,68,0.3); }
+
+/* ═══════════════════════════════════════════════
+   BOTTOM NAV (mobile)
+═══════════════════════════════════════════════ */
+.bottom-nav {
+  position: fixed; bottom: 0; left: 0; right: 0; z-index: 100;
+  background: rgba(13,13,13,0.97);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-top: 1px solid var(--border);
+  display: flex;
+  padding-bottom: max(12px, env(safe-area-inset-bottom));
+}
+.nav-btn {
+  flex: 1; display: flex; flex-direction: column;
+  align-items: center; gap: 2px; min-width: 0;
+  padding: 8px 2px 0;
+  background: none; border: none; cursor: pointer;
+  color: var(--muted); transition: color 0.2s;
+  -webkit-tap-highlight-color: transparent;
+}
+.nav-btn.active { color: var(--orange); }
+.nav-btn svg { width: 18px; height: 18px; }
+.nav-label {
+  font-family: var(--sf-text);
+  font-size: 8px;
+  letter-spacing: 0.04em;
+  max-width: 64px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Sections visibility for bottom nav */
+.page-section { display: block; }
+
+/* ═══════════════════════════════════════════════
+   UTILITY
+═══════════════════════════════════════════════ */
+.mt12 { margin-top: 12px; }
+.hidden { display: none !important; }
+
+/* Trust strip (below topbar) */
+.aria-trust-top {
+  max-width: 680px; margin: 0 auto;
+  padding: 6px 20px;
+  font-size: 11px; color: #666;
+  text-align: center;
+  letter-spacing: 0.02em;
+  border-bottom: 1px solid var(--border);
+  background: rgba(10,15,30,0.5);
+}
+
+/* Social proof ticker */
+.social-proof-bar {
+  height: 36px; overflow: hidden;
+  background: #0A0F1E;
+  border-bottom: 1px solid #1E3A5F;
+  position: relative;
+}
+.social-proof-inner {
+  display: flex; align-items: center; justify-content: center;
+  height: 36px; padding: 0 16px;
+  text-align: center;
+}
+.social-proof-msg {
+  font-family: var(--sf-text);
+  font-size: 12px;
+  color: #7EB6FF;
+  text-shadow: 0 0 20px rgba(59,130,246,0.25);
+  opacity: 1;
+  position: relative;
+  left: auto; right: auto;
+  transition: opacity 0.4s ease;
+}
+.social-proof-msg .sp-gold { color: #E8C97A; }
+
+/* Stats bar */
+.aria-stats-bar {
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px;
+  max-width: 680px; margin: 0 auto; padding: 10px 16px 12px;
+  border-bottom: 1px solid var(--border);
+  background: rgba(13,13,13,0.98);
+}
+.aria-stat-card {
+  background: var(--card2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 8px 6px;
+  text-align: center;
+}
+.aria-stat-num { font-family: var(--sf-display); font-size: 14px; font-weight: 800; color: #1A56DB; }
+.aria-stat-lbl { font-size: 9px; color: var(--muted); margin-top: 2px; text-transform: uppercase; letter-spacing: 0.06em; }
+
+.logo-beta {
+  font-size: 10px; font-weight: 700; color: #fff;
+  background: #1A56DB; padding: 2px 7px; border-radius: 999px;
+  letter-spacing: 0.06em; margin-left: 6px; vertical-align: middle;
+}
+
+/* Price flash on update */
+.price-val.price-flash { animation: priceFlash 0.45s ease-out; }
+@keyframes priceFlash {
+  0% { box-shadow: 0 0 0 0 rgba(26,86,219,0.5); }
+  100% { box-shadow: 0 0 0 8px transparent; }
+}
+
+/* Skeleton */
+.skeleton-line {
+  height: 12px; border-radius: 4px;
+  background: linear-gradient(90deg, #222 25%, #2a2a2a 50%, #222 75%);
+  background-size: 200% 100%;
+  animation: skel 1.2s ease-in-out infinite;
+  margin-bottom: 10px;
+}
+@keyframes skel { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+
+.impact-badge-hi {
+  display: inline-block; font-size: 9px; font-weight: 700;
+  padding: 2px 6px; border-radius: 3px;
+  background: rgba(255,71,87,0.2); color: #FF4757; border: 1px solid rgba(255,71,87,0.4);
+}
+
+.news-next-row {
+  padding: 8px 16px; font-family: var(--sf-mono); font-size: 11px;
+  color: var(--muted); border-bottom: 1px solid var(--border);
+}
+.news-next-row strong { color: var(--success); }
+
+/* Risk gauge labels */
+.risk-g-low { color: var(--success) !important; }
+.risk-g-med { color: #FFB300 !important; }
+.risk-g-high { color: #FF9500 !important; }
+.risk-g-ext { color: var(--danger) !important; }
+
+.health-pulse { animation: healthPulse 0.8s ease-out; }
+@keyframes healthPulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.03); }
+  100% { transform: scale(1); }
+}
+
+/* Onboarding + upgrade modals */
+.aria-wizard-overlay, .aria-upgrade-overlay {
+  position: fixed; inset: 0; z-index: 10001;
+  background: rgba(0,0,0,0.85);
+  display: none; align-items: center; justify-content: center;
+  padding: 20px;
+}
+.aria-wizard-overlay.open, .aria-upgrade-overlay.open, .aria-pro-billing-overlay.open { display: flex; }
+.aria-pro-billing-overlay {
+  position: fixed; inset: 0; z-index: 10002;
+  background: rgba(0,0,0,0.88);
+  display: none; align-items: center; justify-content: center;
+  padding: 20px;
+}
+.pro-billing-close {
+  position: absolute; top: 12px; right: 14px;
+  width: 32px; height: 32px; border: none; border-radius: 8px;
+  background: rgba(255,255,255,0.08); color: var(--muted);
+  font-size: 20px; line-height: 1; cursor: pointer;
+  z-index: 2;
+}
+.pro-billing-close:hover { color: var(--cream); background: rgba(255,255,255,0.12); }
+.aria-pro-billing-card {
+  position: relative;
+  width: min(440px, 100%);
+  background: #0F1117;
+  border: 1px solid #1E3A5F;
+  border-radius: 12px;
+  padding: 28px 22px 24px;
+  box-shadow: 0 0 40px rgba(26,86,219,0.15);
+}
+.upgrade-modal-content { text-align: center; }
+.upgrade-modal-content h2 {
+  font-family: var(--sf-display);
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--cream);
+  margin-bottom: 8px;
+}
+.upgrade-subtitle {
+  font-size: 14px;
+  color: var(--muted);
+  margin-bottom: 20px;
+}
+.upgrade-price {
+  margin-bottom: 20px;
+}
+.upgrade-price .price-amount {
+  font-family: var(--sf-display);
+  font-size: 32px;
+  font-weight: 800;
+  color: #1A56DB;
+}
+.upgrade-price .price-period {
+  font-size: 15px;
+  color: var(--muted);
+  margin-left: 4px;
+}
+.upgrade-benefits {
+  text-align: left;
+  margin: 0 0 22px;
+  padding: 0 4px;
+}
+.upgrade-benefits .benefit {
+  position: relative;
+  padding-left: 22px;
+  font-size: 13px;
+  color: var(--cream);
+  line-height: 1.65;
+  margin-bottom: 8px;
+}
+.upgrade-benefits .benefit::before {
+  content: '✓';
+  position: absolute;
+  left: 0;
+  color: #00C896;
+  font-weight: 700;
+}
+.upgrade-btn-primary {
+  width: 100%;
+  padding: 14px 18px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: #1A56DB;
+  color: #fff;
+  font-family: var(--sf-display);
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  margin-bottom: 12px;
+}
+.upgrade-btn-primary:hover { filter: brightness(1.08); }
+.upgrade-btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+.upgrade-guarantee {
+  font-size: 11px;
+  color: var(--muted);
+  line-height: 1.5;
+  margin-bottom: 14px;
+}
+.upgrade-btn-secondary {
+  width: 100%;
+  padding: 12px;
+  border: 1px solid var(--border2);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--muted);
+  font-size: 14px;
+  cursor: pointer;
+}
+.upgrade-btn-secondary:hover { color: var(--cream); border-color: var(--border); }
+.aria-wizard-card, .aria-upgrade-card {
+  width: min(440px, 100%);
+  background: #0F1117;
+  border: 1px solid #1E3A5F;
+  border-radius: 12px;
+  padding: 24px 20px;
+  box-shadow: 0 0 40px rgba(26,86,219,0.15);
+}
+.aria-wizard-dots { display: flex; gap: 8px; justify-content: center; margin-bottom: 16px; }
+.aria-wizard-dot { width: 8px; height: 8px; border-radius: 50%; background: #333; }
+.aria-wizard-dot.on { background: #1A56DB; box-shadow: 0 0 8px #1A56DB; }
+.aria-wizard-title { font-family: var(--sf-display); font-size: 18px; font-weight: 700; margin-bottom: 12px; text-align: center; }
+.aria-wizard-body { font-size: 14px; color: var(--muted); margin-bottom: 16px; line-height: 1.5; }
+.aria-upgrade-benefits { text-align: left; margin: 16px 0; font-size: 13px; color: var(--cream); line-height: 1.7; }
+.aria-footer-slim {
+  max-width: 680px; margin: 0 auto; padding: 16px 20px max(88px, calc(28px + env(safe-area-inset-bottom)));
+  text-align: center; font-size: 10px; color: #555;
+  line-height: 1.6; border-top: 1px solid var(--border);
+}
+@media (min-width: 600px) {
+  .aria-footer-slim { padding-bottom: 28px; }
+}
+
+
+/* Edit-in-place prop stat */
+.prop-stat-input {
+  background: transparent; border: none; border-bottom: 1px solid var(--orange);
+  color: var(--cream); font-family: var(--sf-mono);
+  font-size: 14px; font-weight: 600; width: 100%; outline: none;
+}
+
+/* Inline bold/colored in ARIA text */
+b { color: var(--cream); font-weight: 600; }
+i { color: var(--amber); font-style: italic; }
+
+/* ═══════════════════════════════════════════════
+   ANIMATIONS / POLISH
+═══════════════════════════════════════════════ */
+.section:nth-child(1) { animation-delay: 0.05s; }
+.section:nth-child(2) { animation-delay: 0.10s; }
+.section:nth-child(3) { animation-delay: 0.15s; }
+.section:nth-child(4) { animation-delay: 0.20s; }
+.section:nth-child(5) { animation-delay: 0.25s; }
+.section:nth-child(6) { animation-delay: 0.30s; }
+.section:nth-child(7) { animation-delay: 0.35s; }
+
+/* ═══════════════════════════════════════════════
+   RESPONSIVE
+═══════════════════════════════════════════════ */
+@media (min-width: 600px) {
+  .bottom-nav { display: none; }
+  .app { padding-bottom: 40px; }
+  .logo-sub { display: block; }
+}
+
+@media (max-width: 420px) {
+  .session-time-badge { display: none; }
+  .journal-form-row2 { grid-template-columns: 1fr 1fr; }
+  .modal-prop-grid { grid-template-columns: 1fr; }
+}
+
+/* ── PREMIUM GOLD OVERRIDES ───────────────────── */
+.prop-stat-value { color: var(--orange) !important; }
+.prop-stat-value.pos { color: var(--success) !important; }
+.prop-stat-value.neg { color: var(--danger) !important; }
+.prop-stat-value.warn { color: var(--warn) !important; }
+
+/* Gold accent line on cards */
+.card::before {
+  content: '';
+  display: block;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(26,86,219,0.4), transparent);
+}
+
+/* Sharp terminal borders */
+.card { border-radius: 4px !important; }
+.card-header { border-bottom: 1px solid var(--border); }
+
+/* Numbers in gold */
+.calc-val { color: var(--orange) !important; }
+.calc-val.pos { color: var(--success) !important; }
+.calc-val.neg { color: var(--danger) !important; }
+
+/* Timer num gold */
+.timer-num { color: var(--orange) !important; }
+.timer-num.warn { color: var(--warn) !important; }
+.timer-num.expired { color: var(--danger) !important; }
+
+/* Prop bar subtle gold bg on hover */
+.prop-stat:hover { background: rgba(26,86,219,0.05) !important; }
+
+/* signal row buy/sell */
+.sig-dir.buy  { background: rgba(0,200,150,0.12) !important; color: var(--success) !important; }
+.sig-dir.sell { background: rgba(255,71,87,0.12)  !important; color: var(--danger) !important; }
+
+/* Risk score num gold */
+#riskNum { color: var(--orange) !important; }
+
+/* Gold scrollbar */
+::-webkit-scrollbar-thumb { background: #2A2A2A !important; }
+
+/* Bottom nav gold active */
+.nav-btn.active svg { filter: drop-shadow(0 0 4px rgba(26,86,219,0.6)); }
+
+/* Section title gold dot */
+.card-title { color: #888888 !important; }
+
+/* Input shell border radius sharp */
+.input-shell { border-radius: 4px !important; }
+.send { border-radius: 4px !important; }
+
+/* Chip sharp */
+.chip { border-radius: 4px !important; }
+
+/* Modal handle gold */
+.modal-handle { background: var(--border) !important; }
+
+/* Journal add btn sharp */
+.journal-add-btn { border-radius: 4px !important; }
+.j-add { border-radius: 4px !important; color: #0D0D0D !important; }
+
+/* Prop bar font */
+.prop-stat-label { color: #555555 !important; }
+
+/* Active session badge glow */
+.session-center.live { 
+  box-shadow: 0 0 0 1px rgba(26,86,219,0.3), 0 0 20px rgba(26,86,219,0.12) !important; 
+}
+
+/* Send button always gold */
+.send { 
+  background: linear-gradient(135deg, #1A56DB, #3B82F6) !important; 
+  color: #0D0D0D !important;
+}
+
+/* Quick chip hover gold */
+.chip:hover { 
+  background: rgba(26,86,219,0.08) !important;
+  border-color: rgba(26,86,219,0.5) !important;
+  color: var(--orange) !important;
+}
+
+/* Section animation delay for premium load-in */
+#sec-calc   { animation-delay: 0.08s !important; }
+#sec-timer  { animation-delay: 0.12s !important; }
+#sec-news   { animation-delay: 0.16s !important; }
+#sec-signals{ animation-delay: 0.20s !important; }
+#sec-journal{ animation-delay: 0.24s !important; }
+#sec-risk   { animation-delay: 0.28s !important; }
+
+
+/* ── LIVE PRICE STRIP ─────────────────────────────── */
+.price-strip {
+  display: flex; align-items: stretch;
+  background: #0D0D0D;
+  border-bottom: 1px solid #2A2A2A;
+  overflow-x: auto; scrollbar-width: none;
+}
+.price-strip::-webkit-scrollbar { display: none; }
+.price-item {
+  flex: 1; min-width: 120px;
+  padding: 10px 16px;
+  border-right: 1px solid #2A2A2A;
+  cursor: default;
+}
+.price-item:last-child { border-right: none; }
+.price-pair {
+  font-family: var(--sf-mono); font-size: 9px;
+  color: #555; letter-spacing: 0.12em; text-transform: uppercase;
+  margin-bottom: 3px;
+  display: flex; align-items: center; gap: 5px;
+}
+.price-src-dot { font-size: 8px; color: #333; transition: color 0.5s; }
+.price-src-dot.live { 
+  color: #00C896; 
+  animation: pip 2.2s infinite;
+  text-shadow: 0 0 10px rgba(0,200,150,0.35);
+}
+.price-src-dot.stale { color: #1A56DB; }
+.price-val {
+  font-family: var(--sf-mono); font-size: 18px; font-weight: 600;
+  color: var(--orange); letter-spacing: -0.5px;
+  transition: color 0.4s;
+}
+.price-val.up   { color: #00C896 !important; }
+.price-val.down { color: #FF4757 !important; }
+.pip-change{
+  font-family: var(--sf-mono);
+  font-size: 12px;
+  letter-spacing: 0;
+  color: inherit;
+  margin-left: 10px;
+  white-space: nowrap;
+}
+.price-meta {
+  font-family: var(--sf-mono); font-size: 10px; color: #444;
+  margin-top: 2px;
+}
+.price-meta.bias-bull { color: #00C896; }
+.price-meta.bias-bear { color: #FF4757; }
+.price-meta.bias-neu  { color: #1A56DB; }
+
+/* ── LIVE DATA INDICATOR in chat header ──────────── */
+#liveDataStatus {
+  font-family: var(--sf-mono); font-size: 10px;
+  padding: 3px 8px; border-radius: 3px;
+  display: inline-flex; align-items: center; gap: 5px;
+}
+.lds-dot {
+  width: 6px; height: 6px; border-radius: 50%; background: #333;
+  transition: background 0.5s, box-shadow 0.5s;
+}
+.lds-dot.live  { background: #00C896; box-shadow: 0 0 6px #00C896; animation: pip 2s infinite; }
+.lds-dot.stale { background: #1A56DB; }
+.lds-dot.off   { background: #333; }
+
+/* Server URL input in modal */
+.server-url-row { display: flex; gap: 8px; margin-bottom: 16px; }
+.server-url-row .modal-input { margin-bottom: 0; flex: 1; }
+.test-btn {
+  padding: 0 16px; background: var(--card2);
+  border: 1px solid var(--border2); border-radius: var(--radius-sm);
+  color: var(--muted); font-family: var(--sf-mono); font-size: 12px;
+  cursor: pointer; white-space: nowrap; transition: all 0.2s;
+}
+.test-btn:hover { border-color: var(--orange); color: var(--orange); }
+
+/* ═══════════════════════════════════════════════
+   AUTH (Supabase) UI Layer
+═══════════════════════════════════════════════ */
+.aria-auth-overlay {
+  position: fixed; inset: 0;
+  background: #0A0A0F;
+  display: none;
+  align-items: center; justify-content: center;
+  z-index: 9999;
+  padding: 24px;
+}
+body.aria-auth-locked .aria-auth-overlay { display: flex; }
+
+.aria-auth-modal {
+  width: min(520px, 100%);
+  background: #0F1117;
+  border: 1px solid #1E3A5F;
+  border-radius: 10px;
+  padding: 26px 18px;
+  box-shadow: 0 0 40px rgba(26, 86, 219, 0.15);
+  backdrop-filter: blur(18px) saturate(180%);
+  text-align: center;
+}
+
+.aria-auth-logo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.aria-auth-tagline {
+  font-family: var(--sf-text);
+  color: #94A3B8;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  margin-top: 10px;
+  margin-bottom: 20px;
+}
+
+.auth-google-btn {
+  width: 100%;
+  max-width: 340px;
+  margin: 0 auto;
+  padding: 14px 18px;
+  background: #1A56DB;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: #FFFFFF;
+  font-family: var(--sf-display);
+  font-size: 15px;
+  font-weight: 800;
+  cursor: pointer;
+  box-shadow: 0 4px 24px rgba(26, 86, 219, 0.22);
+  transition: opacity 0.2s, transform 0.1s;
+}
+.auth-google-btn:hover { background: #1E429F; opacity: 1; }
+.auth-google-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+
+.aria-auth-subtext {
+  margin-top: 14px;
+  font-family: var(--sf-mono);
+  font-size: 10px;
+  color: #475569;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.aria-auth-logo .logo-mark {
+  background: #3B82F6;
+  color: #FFFFFF;
+  box-shadow: 0 0 16px rgba(59,130,246,0.45);
+}
+
+.aria-auth-logo .logo-text {
+  background: none;
+  -webkit-background-clip: border-box;
+  -webkit-text-fill-color: #F1F5F9;
+  color: #F1F5F9;
+}
+
+body.aria-auth-locked .topbar,
+body.aria-auth-locked .prop-bar,
+body.aria-auth-locked .price-strip,
+body.aria-auth-locked .app {
+  display: none;
+}
+
+.topbar-mid { display:flex; align-items:center; gap:10px; }
+
+.user-center {
+  display:flex;
+  flex-direction:column;
+  align-items:flex-start;
+  gap:4px;
+  background: #141414;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 6px 12px;
+  min-width: 140px;
+}
+
+.user-email {
+  font-family: var(--sf-mono);
+  font-size: 10px;
+  color: var(--cream);
+  max-width: 170px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.plan-badge {
+  font-family: var(--sf-mono);
+  font-size: 10px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(26,86,219,0.4);
+  background: rgba(26,86,219,0.12);
+  color: var(--orange);
+  align-self:flex-start;
+}
+.plan-badge.pro {
+  border-color: rgba(0,200,150,0.5);
+  background: rgba(0,200,150,0.12);
+  color: var(--success);
+}
+
+#ariaLogoutBtn {
+  margin-top: 10px !important;
+  background: rgba(255,71,87,0.10) !important;
+  border-color: rgba(255,71,87,0.25) !important;
+  color: var(--danger) !important;
+}
+#ariaLogoutBtn:hover {
+  border-color: rgba(255,71,87,0.6) !important;
+  color: var(--danger) !important;
+}
+
+</style>
+</head>
+<body class="aria-auth-locked">
+
+<!-- ═══ SUPABASE AUTH (load before app boot) ═════════════ -->
+<script type="module">
+  import {
+    googleOAuthLogin,
+    logout as supabaseLogout,
+    getCurrentUser,
+    getUserPlan,
+    supabase,
+    approveUser,
+  } from './supabase-config.js';
+
+  window.__ARIA_AUTH__ = { user: null, plan: 'free', access_token: null };
+  window.__ARIA_SUPABASE__ = supabase;
+  window.__ARIA_USER__ = null;
+  window.approveUser = approveUser;
+
+  window.__ARIA_REFRESHAccessToken = async () => {
+    const { data: { session }, error } = await supabase.auth.getSession();
+    if (error) console.warn('ARIA getSession:', error);
+    const t = session?.access_token ?? null;
+    if (window.__ARIA_AUTH__) window.__ARIA_AUTH__.access_token = t;
+    return t;
+  };
+
+  supabase.auth.onAuthStateChange((_event, session) => {
+    if (!window.__ARIA_AUTH__) return;
+    window.__ARIA_AUTH__.access_token = session?.access_token ?? null;
+  });
+
+  const setAuthLocked = (locked) => {
+    document.body.classList.toggle('aria-auth-locked', locked);
+    document.body.classList.toggle('aria-auth-unlocked', !locked);
+  };
+
+  const applyUserProfileUI = (user, plan) => {
+    const label = String(plan || 'free').toLowerCase() === 'pro' ? 'Pro' : 'Free';
+    const email = user?.email || '—';
+
+    const headerEmail = document.getElementById('ariaUserEmail');
+    const headerPlan = document.getElementById('ariaUserPlanBadge');
+    const settingsEmail = document.getElementById('ariaSettingsUserEmail');
+    const settingsPlan = document.getElementById('ariaSettingsUserPlanBadge');
+
+    if (headerEmail) headerEmail.textContent = email;
+    if (settingsEmail) settingsEmail.textContent = email;
+
+    if (headerPlan) {
+      headerPlan.textContent = label;
+      headerPlan.classList.toggle('pro', label === 'Pro');
+    }
+    if (settingsPlan) {
+      settingsPlan.textContent = label;
+      settingsPlan.classList.toggle('pro', label === 'Pro');
+    }
+    window.dispatchEvent(new CustomEvent('ariaauthchange', { detail: { user, plan } }));
+  };
+
+  async function syncAuthState() {
+    setAuthLocked(true);
+    try {
+      const { data, error } = await getCurrentUser();
+      if (error) {
+        console.warn('ARIA auth getUser error:', error);
+        return;
+      }
+
+      const user = data?.user ?? null;
+      if (!user) {
+        window.__ARIA_USER__ = null;
+        return;
+      }
+
+      const plan = await getUserPlan(user.id);
+      const { data: { session } } = await supabase.auth.getSession();
+      window.__ARIA_AUTH__ = {
+        user,
+        plan: plan || 'free',
+        access_token: session?.access_token ?? null,
+      };
+      window.__ARIA_USER__ = user;
+
+      // If DOM already exists, apply immediately.
+      applyUserProfileUI(user, plan);
+
+      // Reveal the main UI and hide overlay.
+      setAuthLocked(false);
+    } catch (e) {
+      console.error('ARIA auth init failed:', e);
+    }
+  }
+
+  window.ariaLogout = async () => {
+    try {
+      await supabaseLogout();
+    } catch (e) {
+      console.warn('ARIA logout error:', e);
+    } finally {
+      window.__ARIA_AUTH__ = { user: null, plan: 'free', access_token: null };
+      window.__ARIA_USER__ = null;
+      setAuthLocked(true);
+      window.location.reload();
+    }
+  };
+
+  document.addEventListener('DOMContentLoaded', () => {
+    const googleBtn = document.getElementById('ariaGoogleBtn');
+    if (googleBtn) {
+      googleBtn.addEventListener('click', async () => {
+        googleBtn.disabled = true;
+        googleBtn.textContent = 'Redirecting…';
+        try {
+          await googleOAuthLogin();
+        } catch (err) {
+          console.error(err);
+          googleBtn.disabled = false;
+          googleBtn.textContent = 'Sign in with Google';
+          alert('Sign in failed. Please try again.');
+        }
+      });
+    }
+
+    const logoutBtn = document.getElementById('ariaLogoutBtn');
+    if (logoutBtn) logoutBtn.addEventListener('click', () => window.ariaLogout());
+    const upgradeBtn = document.getElementById('ariaUpgradeBtn');
+    if (upgradeBtn) {
+      upgradeBtn.addEventListener('click', () => {
+        if (typeof window.openManualUpgradeModal === 'function') {
+          window.openManualUpgradeModal();
+        } else if (typeof window.showUpgradeModal === 'function') {
+          window.showUpgradeModal();
+        }
+      });
+    }
+
+    // If auth already resolved before DOMContentLoaded, apply now + sync JWT.
+    (async () => {
+      const u = window.__ARIA_AUTH__?.user;
+      const p = window.__ARIA_AUTH__?.plan;
+      if (u) {
+        await window.__ARIA_REFRESHAccessToken?.();
+        applyUserProfileUI(u, p);
+      }
+    })();
+  });
+
+  syncAuthState();
+</script>
+
+<!-- Full-screen login overlay -->
+<div id="aria-auth-overlay" class="aria-auth-overlay" role="dialog" aria-modal="true" aria-label="ARIA login">
+  <div class="aria-auth-modal">
+    <div class="aria-auth-logo">
+      <div class="logo-mark">AR</div>
+      <div class="logo-text" style="font-size:26px;">ARIA</div>
+    </div>
+    <div class="aria-auth-tagline">AI Risk Intelligence for Prop Traders</div>
+    <button class="auth-google-btn" id="ariaGoogleBtn" type="button">Sign in with Google</button>
+    <div class="aria-auth-subtext">Secure access</div>
+  </div>
+</div>
+
+<!-- ═══ TOP BAR ═══════════════════════════════════════════ -->
+<div class="topbar">
+  <div class="logo">
+    <div class="logo-mark">AR</div>
+    <div>
+      <div style="display:flex;align-items:center;flex-wrap:wrap;gap:4px">
+        <span class="logo-text">ARIA</span>
+        <span class="logo-beta">BETA</span>
+      </div>
+      <div class="logo-sub">Trading Intelligence</div>
+    </div>
+  </div>
+
+  <div class="topbar-mid">
+    <div class="session-center" id="sessionBadge">
+      <div class="session-pip" id="sessionPip"></div>
+      <span class="session-label" id="sessionLabel">⚫ MARKET CLOSED</span>
+      <span class="session-time-badge" id="sessionTime">—</span>
+    </div>
+    <div class="user-center" id="ariaUserCenter">
+      <div class="user-email" id="ariaUserEmail">—</div>
+      <div class="plan-badge" id="ariaUserPlanBadge">Free</div>
+    </div>
+  </div>
+
+  <button class="gear-btn" onclick="openModal()" title="Settings">
+    <div class="api-dot" id="apiDot"></div>
+    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="10" cy="10" r="2.8"/>
+      <path d="M10 2v2M10 16v2M2 10h2M16 10h2M4.22 4.22l1.42 1.42M14.36 14.36l1.42 1.42M4.22 15.78l1.42-1.42M14.36 5.64l1.42-1.42"/>
+    </svg>
+  </button>
+</div>
+
+<div class="aria-trust-top" aria-hidden="true">
+  🔒 256-bit encrypted · ☁ Cloud synced · 📊 Live market data · 🤖 Powered by Claude AI
+</div>
+
+<div class="social-proof-bar" aria-live="polite">
+  <div class="social-proof-inner">
+    <span class="social-proof-msg active" id="socialProofMsg">✓ 247 traders active on ARIA right now</span>
+  </div>
+</div>
+
+<div class="aria-stats-bar" aria-hidden="true">
+  <div class="aria-stat-card"><div class="aria-stat-num">247+</div><div class="aria-stat-lbl">Active Traders</div></div>
+  <div class="aria-stat-card"><div class="aria-stat-num">89%</div><div class="aria-stat-lbl">Risk Accuracy</div></div>
+  <div class="aria-stat-card"><div class="aria-stat-num">₹1,999</div><div class="aria-stat-lbl">Per Month</div></div>
+  <div class="aria-stat-card"><div class="aria-stat-num">4.8★</div><div class="aria-stat-lbl">Rating</div></div>
+</div>
+
+<!-- ═══ PROP FIRM STATUS BAR ═══════════════════════════════ -->
+<div class="prop-bar" id="propBar">
+  <div class="prop-stat" onclick="editPropStat('balance')" title="Tap to edit balance">
+    <div class="prop-stat-label">Balance</div>
+    <div class="prop-stat-value" id="ps-balance">$4,950</div>
+  </div>
+  <div class="prop-stat" onclick="editPropStat('pnl')" title="Tap to edit PnL">
+    <div class="prop-stat-label">PnL</div>
+    <div class="prop-stat-value neg" id="ps-pnl">−$50</div>
+  </div>
+  <div class="prop-stat" onclick="editPropStat('target')" title="Tap to edit target">
+    <div class="prop-stat-label">Target</div>
+    <div class="prop-stat-value warn" id="ps-target">$150</div>
+  </div>
+  <div class="prop-stat" onclick="editPropStat('daily')" title="Tap to edit daily limit">
+    <div class="prop-stat-label">Daily Left</div>
+    <div class="prop-stat-value" id="ps-daily">$150</div>
+  </div>
+  <div class="prop-stat" style="cursor:default">
+    <div class="prop-stat-label">Health</div>
+    <div class="prop-stat-value warn" id="ps-health">🟡 CAUTION</div>
+  </div>
+</div>
+
+<!-- ═══ LIVE PRICE STRIP ══════════════════════════════════ -->
+<div class="price-strip" id="priceStrip">
+  <div class="price-item price-feed-eur" id="pi-EURUSD" data-pair="EUR/USD">
+    <div class="price-pair">EUR/USD <span class="price-src-dot" id="dot-EURUSD" title="Waiting for live data">●</span></div>
+    <div class="price-val" id="pv-EURUSD">—</div>
+    <div class="price-meta" id="pm-EURUSD">connecting…</div>
+  </div>
+  <div class="price-item price-feed-aud" id="pi-AUDUSD" data-pair="AUD/USD">
+    <div class="price-pair">AUD/USD <span class="price-src-dot" id="dot-AUDUSD" title="Waiting for live data">●</span></div>
+    <div class="price-val" id="pv-AUDUSD">—</div>
+    <div class="price-meta" id="pm-AUDUSD">connecting…</div>
+  </div>
+</div>
+
+<!-- ═══ MAIN APP ═══════════════════════════════════════════ -->
+<div class="app">
+
+  <!-- ── SECTION 1: CHAT ─────────────────────────────────── -->
+  <div class="section" id="sec-chat">
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">Ask ARIA</div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <div id="liveDataStatus" style="display:flex;align-items:center;gap:5px;">
+            <div class="lds-dot off" id="ldsDot"></div>
+            <span id="ldsText" style="font-family:var(--sf-mono);font-size:9px;color:#444;letter-spacing:0.1em">—</span>
+          </div>
+          <div class="card-badge" id="ariaConnectedBadge" style="border-color:rgba(0,200,150,0.35);background:rgba(0,200,150,0.12);color:#00C896">—</div>
+        </div>
+      </div>
+
+      <!-- Messages -->
+      <div class="messages" id="messages" style="padding:16px 16px 8px; min-height:0;"></div>
+
+      <!-- Input -->
+      <div class="chat-wrap">
+        <div class="input-shell">
+          <textarea class="chat-ta" id="chatTa" rows="1"
+            placeholder="Ask ARIA — pair, signal, session, strategy…"
+            onkeydown="onKey(event)" oninput="growTa(this)"></textarea>
+          <button class="send" id="sendBtn" onclick="send()">
+            <svg viewBox="0 0 20 20" fill="currentColor"><path d="M3 10l13.5-6.5L10 17l-1.5-6.5L3 10z"/></svg>
+          </button>
+        </div>
+      </div>
+      <div class="chips">
+        <button class="chip" onclick="quick('Analyse EURUSD — current HTF bias, order blocks, FVG zones, and give me a specific trade setup with my 0.25 lot, 10 pip SL, 20 pip TP rules.')">EURUSD Analysis</button>
+        <button class="chip" onclick="quick('Analyse AUDUSD — current bias, key levels, and whether I should trade it today.')">AUDUSD Analysis</button>
+        <button class="chip" onclick="quick('Should I trade right now? Check session validity, upcoming news risk, and my prop firm drawdown position.')">Should I Trade?</button>
+        <button class="chip" onclick="quick('What session is active right now in IST? What pairs should I focus on and which to avoid?')">Session Check</button>
+        <button class="chip" onclick="quick('Give me a complete daily trading brief — best pairs, session schedule, news risks today, and prop firm mindset for my current PnL situation.')">Daily Brief</button>
+        <button class="chip" onclick="quick('Run a full risk check on my prop firm account. I have -$50 PnL, $4950 balance, $150 profit target, and $300 max total drawdown. What is my current risk situation?')">Risk Check</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── SECTION 2: CALCULATOR ───────────────────────────── -->
+  <div class="section" id="sec-calc">
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">Trade Calculator</div>
+        <div style="font-family:var(--sf-mono);font-size:10px;color:var(--muted);">0.25 lot · 10 SL · 20 TP</div>
+      </div>
+      <div class="calc-body">
+        <div class="calc-price-row">
+          <input type="number" class="calc-field" id="c-entry" placeholder="Entry (e.g. 1.1480)" step="0.00001" oninput="calcUpdate()">
+          <input type="number" class="calc-field" id="c-entry2" placeholder="Current price (opt)" step="0.00001" oninput="calcUpdate()">
+        </div>
+
+        <div class="calc-results" id="calcResults">
+          <div class="calc-grid">
+            <div class="calc-item">
+              <div class="calc-label">Stop Loss</div>
+              <div class="calc-val neg" id="c-sl">—</div>
+            </div>
+            <div class="calc-item">
+              <div class="calc-label">SL Risk</div>
+              <div class="calc-val neg" id="c-sl-usd">−$25</div>
+            </div>
+            <div class="calc-item">
+              <div class="calc-label">Take Profit</div>
+              <div class="calc-val pos" id="c-tp">—</div>
+            </div>
+            <div class="calc-item">
+              <div class="calc-label">TP Reward</div>
+              <div class="calc-val pos" id="c-tp-usd">+$50</div>
+            </div>
+            <div class="calc-item">
+              <div class="calc-label">Lot Size</div>
+              <div class="calc-val info">0.25</div>
+            </div>
+            <div class="calc-item">
+              <div class="calc-label">Risk:Reward</div>
+              <div class="calc-val info">1 : 2</div>
+            </div>
+          </div>
+          <div class="calc-close">
+            <span>⏱</span>
+            <span>Max hold 90 min — Close by: <span id="c-close-time" style="color:var(--warn)">—</span> IST</span>
+          </div>
+        </div>
+
+        <div class="calc-actions">
+          <button class="btn-take" onclick="logCalcTrade('take')">⚡ TAKE TRADE</button>
+          <button class="btn-skip" onclick="logCalcTrade('skip')">SKIP</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── SECTION 3: TIMER ────────────────────────────────── -->
+  <div class="section" id="sec-timer">
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">Setup Timer</div>
+        <div style="font-family:var(--sf-mono);font-size:10px;color:var(--muted);">Max 2 hr window</div>
+      </div>
+      <div class="timer-body">
+        <div class="timer-display">
+          <div class="timer-num" id="timerNum">2:00:00</div>
+          <div class="timer-sub" id="timerSub">Ready to start</div>
+        </div>
+        <div class="timer-btns">
+          <button class="btn-timer-start" id="timerBtn" onclick="timerToggle()">
+            ⏱ START 2HR TIMER
+          </button>
+          <button class="btn-timer-reset" onclick="timerReset()">Reset</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── SECTION 4: NEWS ─────────────────────────────────── -->
+  <div class="section" id="sec-news">
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">Economic Calendar</div>
+        <div class="card-badge" id="newsBadge"><span class="skeleton-line" style="display:inline-block;width:52px;height:10px;margin:0;vertical-align:middle"></span></div>
+      </div>
+      <div class="news-next-row" id="newsNextRow" style="display:none">
+        Next high-impact: <strong id="newsNextCountdown">—</strong>
+      </div>
+      <div class="news-warn-bar" id="newsWarnBar">
+        <span>⚠️</span>
+        <span id="newsWarnText">High impact news soon — consider waiting</span>
+      </div>
+      <div class="news-body" id="newsBody">
+        <div class="skeleton-line" style="width:92%"></div>
+        <div class="skeleton-line" style="width:78%"></div>
+        <div class="skeleton-line" style="width:85%"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── SECTION 5: SIGNAL LOG ───────────────────────────── -->
+  <div class="section" id="sec-signals">
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">Signal Log</div>
+        <div style="font-family:var(--sf-mono);font-size:10px;color:var(--muted);" id="signalCount">0 signals</div>
+      </div>
+      <div class="signal-body" id="signalBody">
+        <div class="signal-empty">No signals yet. Ask ARIA for analysis to log signals.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── SECTION 6: JOURNAL ──────────────────────────────── -->
+  <div class="section" id="sec-journal">
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">Trade Journal</div>
+        <div style="font-family:var(--sf-mono);font-size:10px;color:var(--muted);" id="journalCount">0 trades</div>
+      </div>
+      <div class="journal-body">
+        <button class="journal-add-btn" onclick="toggleJournalForm()">
+          <span>+</span> LOG TRADE
+        </button>
+        <div class="journal-add-form" id="journalForm">
+          <div class="journal-form-row">
+            <input type="text" class="j-input" id="j-pair" placeholder="Pair">
+            <select class="j-input" id="j-dir">
+              <option value="BUY">BUY</option>
+              <option value="SELL">SELL</option>
+            </select>
+            <select class="j-input" id="j-result">
+              <option value="WIN">WIN ✅</option>
+              <option value="LOSS">LOSS ❌</option>
+              <option value="SKIP">SKIP —</option>
+              <option value="BE">BE ↔️</option>
+            </select>
+          </div>
+          <div class="journal-form-row2">
+            <input type="number" class="j-input" id="j-entry" placeholder="Entry" step="0.00001">
+            <input type="number" class="j-input" id="j-exit"  placeholder="Exit"  step="0.00001">
+            <input type="number" class="j-input" id="j-pnl"   placeholder="PnL $">
+            <button class="j-add" onclick="addJournalTrade()">ADD</button>
+          </div>
+        </div>
+        <div class="journal-stats">
+          <div class="jstat">
+            <div class="jstat-label">Win Rate</div>
+            <div class="jstat-val pos" id="js-wr">—</div>
+          </div>
+          <div class="jstat">
+            <div class="jstat-label">Total PnL</div>
+            <div class="jstat-val" id="js-pnl">—</div>
+          </div>
+          <div class="jstat">
+            <div class="jstat-label">Best Pair</div>
+            <div class="jstat-val" id="js-best">—</div>
+          </div>
+        </div>
+        <div class="journal-list">
+          <table class="journal-table">
+            <thead>
+              <tr>
+                <th>Pair</th><th>Dir</th><th>Entry</th><th>Exit</th><th>PnL</th><th>Result</th><th>Time</th><th></th>
+              </tr>
+            </thead>
+            <tbody id="journalBody">
+              <tr><td colspan="8"><div class="journal-empty">No trades logged yet.</div></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── SECTION 7: RISK SCORE ───────────────────────────── -->
+  <div class="section" id="sec-risk">
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">Risk Score</div>
+        <div class="card-badge" id="riskBadge">—/10</div>
+      </div>
+      <div class="risk-body">
+        <div class="risk-score-display">
+          <div class="risk-circle" id="riskCircle">
+            <div class="risk-num" id="riskNum">—</div>
+          </div>
+          <div class="risk-desc">
+            <div class="risk-score-label" id="riskLabel"><span class="skeleton-line" style="display:block;width:85%;height:12px;margin:4px 0"></span></div>
+            <div class="risk-score-sub" id="riskSub">Analysing current session, news, and account health.</div>
+          </div>
+        </div>
+        <div class="risk-checks" id="riskChecks">
+          <div class="risk-check">
+            <span class="risk-check-label">Valid Session</span>
+            <span class="risk-check-status rcs-warn" id="rc-session"><span class="skeleton-line" style="display:inline-block;width:72px;height:10px;margin:0;vertical-align:middle"></span></span>
+          </div>
+          <div class="risk-check">
+            <span class="risk-check-label">News Risk</span>
+            <span class="risk-check-status rcs-warn" id="rc-news"><span class="skeleton-line" style="display:inline-block;width:72px;height:10px;margin:0;vertical-align:middle"></span></span>
+          </div>
+          <div class="risk-check">
+            <span class="risk-check-label">Account Health</span>
+            <span class="risk-check-status rcs-warn" id="rc-account"><span class="skeleton-line" style="display:inline-block;width:72px;height:10px;margin:0;vertical-align:middle"></span></span>
+          </div>
+          <div class="risk-check">
+            <span class="risk-check-label">Daily Limit</span>
+            <span class="risk-check-status rcs-warn" id="rc-daily"><span class="skeleton-line" style="display:inline-block;width:72px;height:10px;margin:0;vertical-align:middle"></span></span>
+          </div>
+          <div class="risk-check">
+            <span class="risk-check-label">Asian Session Block</span>
+            <span class="risk-check-status rcs-warn" id="rc-asian"><span class="skeleton-line" style="display:inline-block;width:72px;height:10px;margin:0;vertical-align:middle"></span></span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /app -->
+
+<!-- ═══ BOTTOM NAV ═════════════════════════════════════════ -->
+<nav class="bottom-nav">
+  <button class="nav-btn active" onclick="scrollTo('sec-chat',this)">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+    </svg>
+    <span class="nav-label">ARIA</span>
+  </button>
+  <button class="nav-btn" onclick="scrollTo('sec-calc',this)">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+      <rect x="4" y="4" width="16" height="16" rx="2"/>
+      <path d="M8 9h8M8 12h5M8 15h3"/>
+    </svg>
+    <span class="nav-label">Calc</span>
+  </button>
+  <button class="nav-btn" onclick="scrollTo('sec-news',this)">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+      <path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v2"/>
+      <path d="M2 10h6M2 14h6M2 18h6"/>
+    </svg>
+    <span class="nav-label">News</span>
+  </button>
+  <button class="nav-btn" onclick="scrollTo('sec-journal',this)">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
+      <line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="15" y2="17"/>
+    </svg>
+    <span class="nav-label">Journal</span>
+  </button>
+  <button class="nav-btn" onclick="scrollTo('sec-risk',this)">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+    </svg>
+    <span class="nav-label">Risk</span>
+  </button>
+  <button class="nav-btn" onclick="openModal(); document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active')); this.classList.add('active');">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+      <circle cx="12" cy="12" r="2.8"/>
+      <path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/>
+    </svg>
+    <span class="nav-label">Settings</span>
+  </button>
+</nav>
+
+<footer class="aria-footer-slim">
+  ARIA Trading · AI Risk Intelligence · Built for prop firm traders · Not financial advice · © 2026 ARIA
+</footer>
+
+<!-- ═══ SETTINGS MODAL ══════════════════════════════════════ -->
+<div class="modal-overlay" id="modalOverlay" onclick="closeModalOutside(event)">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title">Settings</div>
+
+    <div class="modal-label">Account</div>
+    <div class="modal-user-card">
+      <div class="modal-user-email" id="ariaSettingsUserEmail">—</div>
+      <div class="plan-badge" id="ariaSettingsUserPlanBadge">Free</div>
+    </div>
+
+    <button class="modal-upgrade-btn" id="ariaUpgradeBtn" type="button">Upgrade to Pro</button>
+    <div id="ariaPaymentSuccess" class="modal-hint" style="display:none;color:var(--success);margin-top:8px;font-weight:600"></div>
+    <button class="modal-sub-btn" id="ariaLogoutBtn" type="button">Logout</button>
+
+    <hr class="modal-sep">
+
+    <div class="modal-label" style="margin-bottom:8px">Prop firm preset</div>
+    <select class="modal-input" id="m-prop-firm" style="margin-bottom:14px;width:100%;box-sizing:border-box" onchange="onPropFirmSelect()">
+      <option value="">Select your prop firm →</option>
+    </select>
+
+    <div class="modal-label" style="margin-bottom:14px">Prop Challenge Settings</div>
+    <div class="modal-prop-grid">
+      <div>
+        <div class="modal-label">Account ($)</div>
+        <input type="number" class="modal-input" id="m-account" placeholder="5000" style="margin-bottom:0">
+      </div>
+      <div>
+        <div class="modal-label">Current PnL ($)</div>
+        <input type="number" class="modal-input" id="m-pnl" placeholder="-50" style="margin-bottom:0">
+      </div>
+      <div>
+        <div class="modal-label">Profit Target ($)</div>
+        <input type="number" class="modal-input" id="m-target" placeholder="500" style="margin-bottom:0">
+      </div>
+      <div>
+        <div class="modal-label">Max Drawdown ($)</div>
+        <input type="number" class="modal-input" id="m-maxdd" placeholder="300" style="margin-bottom:0">
+      </div>
+      <div>
+        <div class="modal-label">Daily Limit ($)</div>
+        <input type="number" class="modal-input" id="m-daily" placeholder="300" style="margin-bottom:0">
+      </div>
+      <div>
+        <div class="modal-label">Daily Used ($)</div>
+        <input type="number" class="modal-input" id="m-dailyused" placeholder="50" style="margin-bottom:0">
+      </div>
+    </div>
+    <button class="modal-sub-btn" onclick="saveProp()" style="margin-bottom:8px">Save Prop Data</button>
+
+    <div class="modal-label" style="margin-top:16px;margin-bottom:8px">Refer a friend → both get 1 month free</div>
+    <div style="display:flex;gap:8px;align-items:stretch;flex-wrap:wrap">
+      <input type="text" class="modal-input" id="ariaReferralLink" readonly value="aria-trader.netlify.app/?ref=USER123" style="flex:1;min-width:200px;margin-bottom:0;font-size:11px;font-family:var(--sf-mono)">
+      <button type="button" class="modal-sub-btn" id="ariaCopyReferralBtn" onclick="copyReferralLink()" style="margin-bottom:0;white-space:nowrap">Copy Link</button>
+    </div>
+    <div id="ariaCopyReferralHint" class="modal-hint" style="margin-top:6px;min-height:16px;color:var(--success);display:none">Copied!</div>
+
+    <hr class="modal-sep">
+    <div class="modal-hint">Secure account settings are linked to your Supabase profile.</div>
+  </div>
+</div>
+
+<!-- Onboarding wizard -->
+<div class="aria-wizard-overlay" id="ariaOnboardOverlay" role="dialog" aria-modal="true" aria-label="ARIA onboarding">
+  <div class="aria-wizard-card">
+    <div style="text-align:center;margin-bottom:8px"><span class="logo-mark" style="display:inline-flex">AR</span></div>
+    <div class="aria-wizard-dots" id="onbDots">
+      <span class="aria-wizard-dot on"></span><span class="aria-wizard-dot"></span><span class="aria-wizard-dot"></span>
+    </div>
+    <div class="aria-wizard-title" id="onbTitle">Which prop firm are you trading with?</div>
+    <div class="aria-wizard-body" id="onbBody">
+      <select class="modal-input" id="onb-firm" style="width:100%;box-sizing:border-box;margin-bottom:12px" onchange="onOnboardFirmChange();updateOnboardCalcHint();">
+        <option value="">Choose firm…</option>
+      </select>
+      <div id="onb-rules" style="font-size:12px;color:var(--muted);min-height:48px;line-height:1.5"></div>
+    </div>
+    <div id="onbStep2" class="hidden">
+      <div class="modal-label">Account Balance ($)</div>
+      <input type="number" class="modal-input" id="onb-balance" placeholder="5000" style="width:100%;box-sizing:border-box;margin-bottom:10px" oninput="updateOnboardCalcHint()">
+      <div class="modal-label">Current PnL ($)</div>
+      <input type="number" class="modal-input" id="onb-pnl" placeholder="-50" style="width:100%;box-sizing:border-box;margin-bottom:10px" oninput="updateOnboardCalcHint()">
+      <div class="modal-hint" id="onb-calc-hint" style="margin-top:8px"></div>
+    </div>
+    <div id="onbStep3" class="hidden">
+      <textarea class="modal-input" id="onb-first-q" rows="3" style="width:100%;box-sizing:border-box;resize:vertical;font-family:var(--sf-text)">Give me a pre-session brief for today</textarea>
+    </div>
+    <div style="display:flex;gap:10px;margin-top:16px;justify-content:flex-end;flex-wrap:wrap">
+      <button type="button" class="modal-sub-btn" id="onbBackBtn" onclick="onboardPrev()" style="display:none;margin-bottom:0">← Back</button>
+      <button type="button" class="modal-upgrade-btn" id="onbNextBtn" onclick="onboardNext()" style="margin-bottom:0;flex:1;min-width:120px">Next →</button>
+    </div>
+  </div>
+</div>
+
+<!-- Upgrade / Pro modal -->
+<div class="aria-upgrade-overlay" id="ariaUpgradeOverlay" role="dialog" aria-modal="true">
+  <div class="aria-upgrade-card">
+    <div class="aria-wizard-title" style="margin-bottom:8px">You're serious about trading.</div>
+    <div class="aria-wizard-body" style="text-align:left">
+      Pro traders use ARIA to get unlimited AI analysis, live economic alerts, cloud sync across devices, and a pre-session brief every single morning. That's what separates the 10% who pass from the 90% who don't.
+    </div>
+    <div class="aria-upgrade-benefits">
+      ✓ Unlimited ARIA AI queries — no daily limits<br>
+      ✓ Live high-impact news alerts 30 min before events<br>
+      ✓ Auto pre-session brief every London &amp; NY open<br>
+      ✓ Cloud sync — access on any device<br>
+      ✓ Priority support from the ARIA team
+    </div>
+    <button type="button" class="modal-upgrade-btn" style="width:100%;margin-bottom:8px" onclick="upgradeModalSubscribe()">Start 7-Day Free Trial — ₹1,999/mo after</button>
+    <div class="modal-hint" style="text-align:center;margin-bottom:8px">Cancel anytime. No questions asked.</div>
+    <div class="modal-hint" style="text-align:center;color:var(--muted)">Join 247+ prop traders already using ARIA</div>
+    <button type="button" class="modal-sub-btn" style="margin-top:14px;width:100%;margin-bottom:0" onclick="closeUpgradeModalAndContinue()">Continue to ARIA (free)</button>
+  </div>
+</div>
+
+<!-- Pro billing — Razorpay (Settings → Upgrade to Pro) -->
+<div class="aria-pro-billing-overlay" id="ariaProBillingOverlay" role="dialog" aria-modal="true" aria-labelledby="proBillingTitle" onclick="if(event.target===this) closeProBillingModal()">
+  <div class="aria-pro-billing-card" onclick="event.stopPropagation()">
+    <button type="button" class="pro-billing-close" onclick="closeProBillingModal()" aria-label="Close">×</button>
+    <div class="upgrade-modal-content">
+      <h2 id="proBillingTitle">Upgrade to Pro</h2>
+      <p class="upgrade-subtitle">Join 247+ prop traders using ARIA</p>
+      <div class="upgrade-price">
+        <span class="price-amount">₹1,999</span>
+        <span class="price-period">/month</span>
+      </div>
+      <div class="upgrade-benefits">
+        <div class="benefit">Unlimited ARIA AI queries</div>
+        <div class="benefit">Live economic alerts 30 min before events</div>
+        <div class="benefit">Auto pre-session brief every morning</div>
+        <div class="benefit">Cloud sync across all devices</div>
+        <div class="benefit">Priority support</div>
+      </div>
+      <button type="button" id="rzp-button" class="upgrade-btn-primary">Start 7-Day Free Trial</button>
+      <p class="upgrade-guarantee">Cancel anytime · No questions asked · UPI &amp; Cards accepted</p>
+      <button type="button" class="upgrade-btn-secondary" onclick="closeProBillingModal()">Maybe later</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ JAVASCRIPT ═════════════════════════════════════════ -->
+<script>
+'use strict';
+
+const FINNHUB_API_KEY = 'd715svpr01ql6rg1g4egd715svpr01ql6rg1g4f0';
+
+/** Cloudflare Worker — always absolute URL (relative /api/aria breaks on static hosts). */
+const ARIA_WORKER_API_URL = 'https://aria-proxy.aria-trader.workers.dev/api/aria';
+
+const PROP_FIRMS = {
+  'FTMO': { maxDD: 10, dailyLoss: 5, target: 10 },
+  'MyForexFunds': { maxDD: 12, dailyLoss: 5, target: 8 },
+  'The Funded Trader': { maxDD: 12, dailyLoss: 4, target: 10 },
+  'FundedNext': { maxDD: 10, dailyLoss: 5, target: 10 },
+  'Apex Trader': { maxDD: 6, dailyLoss: 3, target: 9 },
+  'Topstep': { maxDD: 8, dailyLoss: 4, target: 8 },
+  'Other': { maxDD: null, dailyLoss: null, target: null }
+};
+
+const SOCIAL_PROOF_MSGS = [
+  '✓ Rahul M. passed his FTMO challenge using ARIA — 3 days ago',
+  '✓ 247 traders active on ARIA right now',
+  '✓ Priya S. from Mumbai: \'ARIA told me not to trade NFP. Saved my account.\'',
+  '✓ Average risk score improvement: 34% in first week',
+  '✓ Arjun K.: \'Best ₹2000 I spend every month. Paid for itself 10x.\'',
+  '✓ ARIA flagged 89% of high-risk sessions correctly last month',
+  '✓ Vikram T. from Delhi: \'Finally a trading tool built for prop traders\'',
+  '✓ 0 data breaches. Bank-grade Supabase encryption.',
+  '✓ Carlos R. from Philippines: \'Went from 3 failed challenges to passing FTMO\'',
+  '✓ Neha G.: \'The pre-session brief alone is worth the subscription\''
+];
+
+/* ── CONSTANTS ─────────────────────────────────────────── */
+const RULES = {
+  lot:      0.25,
+  slPips:   10,
+  tpPips:   20,
+  slUsd:    25,
+  tpUsd:    50,
+  rr:       '1:2',
+  maxHold:  90,      // minutes
+  timerDur: 7200,    // 2 hours in seconds
+  // Valid session windows in IST minutes
+  sessions: [
+    { name: 'London', start: 11*60+30, end: 13*60+30, label: 'LONDON', type: 'valid' },
+    { name: 'NY Open', start: 18*60+30, end: 20*60+30, label: 'NEW YORK', type: 'valid' },
+    { name: 'Asian', start: 5*60+30, end: 14*60+30, label: 'ASIAN', type: 'avoid' },
+  ]
+};
+
+/* ── STATE ─────────────────────────────────────────────── */
+let apiKey    = localStorage.getItem('aria3_key') || '';
+let prop      = JSON.parse(localStorage.getItem('aria3_prop') || 'null') || {
+  account:5000, pnl:-50, target:500, maxDD:300, daily:300, dailyUsed:50, propFirm:'Other'
+};
+if (!prop.propFirm) prop.propFirm = 'Other';
+let signals   = JSON.parse(localStorage.getItem('aria3_signals') || '[]');
+let trades    = JSON.parse(localStorage.getItem('aria3_trades') || '[]');
+let chatHist  = [];
+let busy      = false;
+let timerEnd  = null;
+let timerTick = null;
+let newsCache = [];
+let lastHealthState = '';
+let lastFetchPrices = { EURUSD: null, AUDUSD: null };
+let pendingSendText = null;
+let onboardStep = 1;
+let displayedRiskScore = null;
+let riskCountUpToken = 0;
+
+/* ── BOOT ─────────────────────────────────────────────── */
+(function boot() {
+  savePropLocal();
+  fillPropFirmSelects();
+  refreshAriaConnectionUI();
+  window.addEventListener('ariaauthchange', refreshAriaConnectionUI);
+  setInterval(refreshAriaConnectionUI, 4000);
+  restoreClientProPlanIfPaid();
+  syncModalProp();
+  syncReferralLink();
+  renderPropBar();
+  renderSignals();
+  renderJournal();
+  loadNews();
+  setInterval(updateRisk, 30000);
+  setInterval(loadNews, 15 * 60 * 1000);
+  startNewsCountdownTicker();
+  initSocialProofTicker();
+  initOnboardingWatcher();
+  // Initial welcome
+  setTimeout(() => {
+    addAriaMsg(
+      '<b>Welcome back, Trader.</b> ' + getWelcomeMessage() + '<br><br>' +
+      'Your account: <b>$' + prop.account + '</b> | PnL: <span style="color:var(--danger)">−$' + Math.abs(prop.pnl) + '</span> | Target: <span style="color:var(--warn)">$' + prop.target + '</span><br><br>' +
+      'Use the quick chips below or ask me anything.'
+    );
+    updateRisk();
+  }, 400);
+})();
+
+function getIST() {
+  const n = new Date();
+  return new Date(n.getTime() + n.getTimezoneOffset()*60000 + 5.5*3600000);
+}
+
+function pad(n) { return String(n).padStart(2,'0'); }
+
+const ARIA_SERVER_URL = 'https://aria-server-production-5e96.up.railway.app';
+
+function getWelcomeMessage() {
+  const savedFirm = localStorage.getItem('aria_propFirm') || 'prop firm';
+  const welcomeMsg = `I'm ARIA — your ${savedFirm} challenge AI.`;
+  return welcomeMsg;
+}
+
+async function getChartContext() {
+  try {
+    const res = await fetch(`${ARIA_SERVER_URL}/latest`);
+    if (!res.ok) return '';
+    const data = await res.json();
+    if (data.EURUSD) {
+      return `
+LIVE TRADINGVIEW M5 DATA:
+EUR/USD: Price=${data.EURUSD.price}, Bias=${data.EURUSD.bias},
+RSI=${data.EURUSD.rsi}, ATR=${data.EURUSD.atr}
+Open=${data.EURUSD.open} High=${data.EURUSD.high} Low=${data.EURUSD.low}
+      `;
+    }
+  } catch(e) { return ''; }
+  return '';
+}
+
+function refreshAriaConnectionUI() {
+  const u = window.__ARIA_AUTH__ && window.__ARIA_AUTH__.user;
+  const badge = document.getElementById('ariaConnectedBadge');
+  const lds = document.getElementById('ldsText');
+  const dot = document.getElementById('ldsDot');
+  const gearDot = document.getElementById('apiDot');
+  if (u) {
+    if (badge) {
+      badge.textContent = 'CONNECTED';
+      badge.style.background = 'rgba(0,200,150,0.12)';
+      badge.style.color = '#00C896';
+      badge.style.borderColor = 'rgba(0,200,150,0.35)';
+    }
+    if (lds) { lds.textContent = 'READY'; lds.style.color = '#00C896'; }
+    if (dot) dot.className = 'lds-dot live';
+    if (gearDot) gearDot.classList.add('show');
+  } else {
+    if (badge) {
+      badge.textContent = 'SIGN IN';
+      badge.style.background = 'rgba(255,71,87,0.08)';
+      badge.style.color = '#888';
+      badge.style.borderColor = 'var(--border)';
+    }
+    if (lds) { lds.textContent = 'OFFLINE'; lds.style.color = '#444'; }
+    if (dot) dot.className = 'lds-dot off';
+  }
+}
+
+function fillPropFirmSelects(which) {
+  const ids = which || ['m-prop-firm', 'onb-firm'];
+  for (const id of ids) {
+    const sel = document.getElementById(id);
+    if (!sel) continue;
+    const keepFirst = id === 'm-prop-firm';
+    if (keepFirst) {
+      sel.innerHTML = '<option value="">Select your prop firm →</option>';
+    } else {
+      sel.innerHTML = '<option value="">Choose firm…</option>';
+    }
+    Object.keys(PROP_FIRMS).forEach(name => {
+      const o = document.createElement('option');
+      o.value = name;
+      o.textContent = name;
+      sel.appendChild(o);
+    });
+  }
+}
+
+function onPropFirmSelect() {
+  const sel = document.getElementById('m-prop-firm');
+  if (!sel) return;
+  prop.propFirm = sel.value || 'Other';
+  applyFirmPercentsToPropFromBalance();
+  syncModalProp();
+}
+
+function applyFirmPercentsToPropFromBalance() {
+  const cfg = PROP_FIRMS[prop.propFirm || 'Other'];
+  const bal = parseFloat(document.getElementById('m-account') && document.getElementById('m-account').value) || prop.account;
+  if (!cfg || cfg.maxDD == null) return;
+  prop.maxDD = Math.round(bal * (cfg.maxDD / 100) * 100) / 100;
+  prop.daily = Math.round(bal * (cfg.dailyLoss / 100) * 100) / 100;
+  prop.target = Math.round(bal * (cfg.target / 100) * 100) / 100;
+}
+
+function buildPropPromptLine() {
+  const firm = prop.propFirm || 'Other';
+  const rem = Math.max(0, (prop.daily || 0) - (prop.dailyUsed || 0));
+  return `Prop firm: ${firm}. Max DD: $${prop.maxDD}. Daily limit: $${prop.daily}. Current PnL: $${prop.pnl}. Remaining daily: $${rem}.`;
+}
+
+function syncReferralLink() {
+  const inp = document.getElementById('ariaReferralLink');
+  if (!inp) return;
+  const uid = (window.__ARIA_AUTH__ && window.__ARIA_AUTH__.user && window.__ARIA_AUTH__.user.id) || '';
+  const code = uid ? String(uid).replace(/[^a-zA-Z0-9]/g, '').slice(0, 8).toUpperCase() || 'USER123' : 'USER123';
+  inp.value = 'aria-trader.netlify.app/?ref=' + code;
+}
+
+function copyReferralLink() {
+  const inp = document.getElementById('ariaReferralLink');
+  const hint = document.getElementById('ariaCopyReferralHint');
+  if (!inp) return;
+  inp.select();
+  inp.setSelectionRange(0, 99999);
+  try {
+    navigator.clipboard.writeText(inp.value);
+  } catch (e) {}
+  if (hint) {
+    hint.style.display = 'block';
+    hint.textContent = 'Copied!';
+    setTimeout(() => { hint.style.display = 'none'; }, 2000);
+  }
+}
+
+function showUpgradeModal() {
+  const o = document.getElementById('ariaUpgradeOverlay');
+  if (o) o.classList.add('open');
+}
+function closeUpgradeModal() {
+  const o = document.getElementById('ariaUpgradeOverlay');
+  if (o) o.classList.remove('open');
+}
+function upgradeModalSubscribe() {
+  if (typeof launchRazorpayCheckout === 'function') {
+    launchRazorpayCheckout({ fromUpgradeModal: true });
+  }
+}
+function closeUpgradeModalAndContinue() {
+  sessionStorage.setItem('aria_upgrade_ack', '1');
+  closeUpgradeModal();
+  const t = pendingSendText;
+  pendingSendText = null;
+  if (t) {
+    document.getElementById('chatTa').value = '';
+    document.getElementById('chatTa').style.height = 'auto';
+    addUserMsg(t);
+    doSendAria(t);
+  }
+}
+window.showUpgradeModal = showUpgradeModal;
+
+/** Razorpay Key ID — replace with your live key after approval */
+const RAZORPAY_CHECKOUT_KEY = 'rzp_live_YOUR_KEY_HERE';
+
+function openProBillingModal() {
+  if (typeof closeModal === 'function') closeModal();
+  const overlay = document.getElementById('ariaProBillingOverlay');
+  if (overlay) overlay.classList.add('open');
+}
+function closeProBillingModal() {
+  const overlay = document.getElementById('ariaProBillingOverlay');
+  if (overlay) overlay.classList.remove('open');
+}
+window.openManualUpgradeModal = openProBillingModal;
+window.closeProBillingModal = closeProBillingModal;
+
+function showSuccessToast(message) {
+  const toast = document.createElement('div');
+  toast.style.cssText =
+    'position: fixed; top: 20px; right: 20px; ' +
+    'background: #00C896; color: white;' +
+    'padding: 16px 24px; border-radius: 8px;' +
+    'font-size: 14px; z-index: 99999;' +
+    'box-shadow: 0 4px 20px rgba(0,200,150,0.3);';
+  toast.textContent = message;
+  document.body.appendChild(toast);
+  setTimeout(function () {
+    toast.remove();
+  }, 5000);
+}
+
+async function handleRazorpayPaymentSuccess(response, opts) {
+  opts = opts || {};
+  const paymentId = response.razorpay_payment_id;
+  const user = window.__ARIA_USER__ || (window.__ARIA_AUTH__ && window.__ARIA_AUTH__.user);
+  const supa = window.__ARIA_SUPABASE__;
+
+  if (user && user.id && supa) {
+    const { error } = await supa
+      .from('users')
+      .update({
+        plan: 'pro',
+        payment_id: paymentId,
+        upgraded_at: new Date().toISOString(),
+      })
+      .eq('id', user.id);
+    if (error) console.warn('[ARIA] Supabase plan update failed:', error.message || error);
+  }
+
+  localStorage.setItem(
+    'aria_razorpay_last_payment',
+    JSON.stringify({ ...response, capturedAt: Date.now(), amount_paise: 199900, currency: 'INR' })
+  );
+  localStorage.setItem('aria_client_plan', 'pro');
+  sessionStorage.setItem('aria_upgrade_ack', '1');
+
+  applyLocalProPlanUI();
+
+  ['ariaUserPlanBadge', 'ariaSettingsUserPlanBadge'].forEach(function (id) {
+    const el = document.getElementById(id);
+    if (el) {
+      el.style.background = '#1A56DB';
+      el.style.color = '#ffffff';
+      el.style.borderColor = 'rgba(255,255,255,0.25)';
+    }
+  });
+
+  const payHint = document.getElementById('ariaPaymentSuccess');
+  if (payHint) {
+    payHint.style.display = 'block';
+    payHint.textContent = 'Upgraded to Pro';
+  }
+
+  closeProBillingModal();
+
+  showSuccessToast('Welcome to ARIA Pro! Unlimited queries unlocked.');
+
+  if (opts.fromUpgradeModal) {
+    closeUpgradeModal();
+    addAriaMsg(
+      '<span style="color:var(--success)"><b>Upgraded to Pro</b> — Payment received. Thank you!</span><br>' +
+        '<span style="color:var(--muted);font-size:12px">Payment ID: ' +
+        esc(String(response.razorpay_payment_id || '—')) +
+        '</span>'
+    );
+    const t = pendingSendText;
+    pendingSendText = null;
+    if (t) {
+      document.getElementById('chatTa').value = '';
+      document.getElementById('chatTa').style.height = 'auto';
+      addUserMsg(t);
+      doSendAria(t);
+    }
+  }
+}
+
+function launchRazorpayCheckout(opts) {
+  opts = opts || {};
+  if (!RAZORPAY_CHECKOUT_KEY || RAZORPAY_CHECKOUT_KEY.indexOf('YOUR_KEY_HERE') !== -1) {
+    alert('Replace rzp_live_YOUR_KEY_HERE in index.html with your Razorpay Key ID when approved.');
+    return;
+  }
+  if (typeof Razorpay === 'undefined') {
+    alert('Razorpay script failed to load. Refresh the page and try again.');
+    return;
+  }
+
+  const user = window.__ARIA_USER__ || (window.__ARIA_AUTH__ && window.__ARIA_AUTH__.user);
+  if (!user || !user.id) {
+    alert('Please sign in with Google to upgrade.');
+    return;
+  }
+
+  const options = {
+    key: RAZORPAY_CHECKOUT_KEY,
+    amount: 199900,
+    currency: 'INR',
+    name: 'ARIA Trading',
+    description: 'Pro Plan - Unlimited AI Trading Analysis',
+    image: 'https://shouryajs08-code.github.io/aria-app/logo.png',
+    handler: function (handlerResponse) {
+      handleRazorpayPaymentSuccess(handlerResponse, opts);
+    },
+    prefill: {
+      email: user.email || '',
+      name: (user.user_metadata && user.user_metadata.full_name) || 'Trader',
+    },
+    theme: { color: '#1A56DB' },
+    modal: {
+      ondismiss: function () {
+        console.log('Payment dismissed');
+      },
+    },
+  };
+
+  try {
+    const rzp = new Razorpay(options);
+    rzp.open();
+  } catch (e) {
+    console.error('Razorpay open failed:', e);
+    alert('Payment could not start: ' + (e && e.message ? e.message : String(e)));
+  }
+}
+
+function openRazorpay() {
+  launchRazorpayCheckout({});
+}
+
+window.startRazorpayProUpgrade = launchRazorpayCheckout;
+
+(function wireRazorpayBillingButton() {
+  const btn = document.getElementById('rzp-button');
+  if (btn) btn.onclick = openRazorpay;
+})();
+
+function applyLocalProPlanUI() {
+  const headerPlan = document.getElementById('ariaUserPlanBadge');
+  const settingsPlan = document.getElementById('ariaSettingsUserPlanBadge');
+  if (headerPlan) {
+    headerPlan.textContent = 'Pro';
+    headerPlan.classList.add('pro');
+  }
+  if (settingsPlan) {
+    settingsPlan.textContent = 'Pro';
+    settingsPlan.classList.add('pro');
+  }
+  if (window.__ARIA_AUTH__) window.__ARIA_AUTH__.plan = 'pro';
+}
+
+function restoreClientProPlanIfPaid() {
+  if (localStorage.getItem('aria_client_plan') === 'pro') {
+    applyLocalProPlanUI();
+  }
+}
+
+let socialProofIdx = 0;
+function initSocialProofTicker() {
+  const el = document.getElementById('socialProofMsg');
+  if (!el) return;
+  setInterval(() => {
+    socialProofIdx = (socialProofIdx + 1) % SOCIAL_PROOF_MSGS.length;
+    el.style.opacity = '0';
+    setTimeout(() => {
+      el.textContent = SOCIAL_PROOF_MSGS[socialProofIdx];
+      el.style.opacity = '1';
+    }, 400);
+  }, 4000);
+}
+
+function startNewsCountdownTicker() {
+  setInterval(() => {
+    const row = document.getElementById('newsNextRow');
+    const el = document.getElementById('newsNextCountdown');
+    if (!row || !el) return;
+    const now = Date.now();
+    const next = newsCache.find(e => e.utcMs > now);
+    if (!next) {
+      row.style.display = 'none';
+      return;
+    }
+    row.style.display = 'block';
+    const sec = Math.max(0, Math.floor((next.utcMs - now) / 1000));
+    const h = Math.floor(sec / 3600);
+    const m = Math.floor((sec % 3600) / 60);
+    const s = sec % 60;
+    el.textContent = `${next.title} (${next.currency}) · ${h}h ${m}m ${s}s`;
+  }, 1000);
+}
+
+/* ── Onboarding ─────────────────────────────────────────── */
+function initOnboardingWatcher() {
+  function tryOpen() {
+    if (!document.body.classList.contains('aria-auth-unlocked')) return;
+    if (localStorage.getItem('aria_onboarded') === 'true') return;
+    openOnboarding();
+  }
+  window.addEventListener('ariaauthchange', () => setTimeout(tryOpen, 400));
+  setTimeout(tryOpen, 1200);
+}
+
+function openOnboarding() {
+  onboardStep = 1;
+  const ov = document.getElementById('ariaOnboardOverlay');
+  if (ov) ov.classList.add('open');
+  fillPropFirmSelects(['onb-firm']);
+  renderOnboardStep();
+}
+
+function closeOnboarding() {
+  const ov = document.getElementById('ariaOnboardOverlay');
+  if (ov) ov.classList.remove('open');
+}
+
+function renderOnboardDots() {
+  const dots = document.querySelectorAll('#onbDots .aria-wizard-dot');
+  dots.forEach((d, i) => d.classList.toggle('on', i < onboardStep));
+}
+
+function renderOnboardStep() {
+  const t = document.getElementById('onbTitle');
+  const b = document.getElementById('onbBody');
+  const s2 = document.getElementById('onbStep2');
+  const s3 = document.getElementById('onbStep3');
+  const back = document.getElementById('onbBackBtn');
+  const next = document.getElementById('onbNextBtn');
+  renderOnboardDots();
+  if (onboardStep === 1) {
+    if (t) t.textContent = 'Which prop firm are you trading with?';
+    if (b) b.classList.remove('hidden');
+    if (s2) s2.classList.add('hidden');
+    if (s3) s3.classList.add('hidden');
+    if (back) back.style.display = 'none';
+    if (next) next.textContent = 'Next →';
+  } else if (onboardStep === 2) {
+    if (t) t.textContent = 'Set up your account';
+    if (b) b.classList.add('hidden');
+    if (s2) s2.classList.remove('hidden');
+    if (s3) s3.classList.add('hidden');
+    if (back) back.style.display = 'inline-block';
+    if (next) next.textContent = 'Next →';
+    updateOnboardCalcHint();
+  } else {
+    if (t) t.textContent = 'Ask ARIA your first question';
+    if (b) b.classList.add('hidden');
+    if (s2) s2.classList.add('hidden');
+    if (s3) s3.classList.remove('hidden');
+    if (back) back.style.display = 'inline-block';
+    if (next) next.textContent = 'Ask ARIA →';
+  }
+}
+
+function onOnboardFirmChange() {
+  const sel = document.getElementById('onb-firm');
+  const rules = document.getElementById('onb-rules');
+  if (!sel || !rules) return;
+  const name = sel.value || 'Other';
+  const cfg = PROP_FIRMS[name];
+  if (!cfg || cfg.maxDD == null) {
+    rules.textContent = 'Enter your own limits in the next step, or pick a preset firm.';
+    return;
+  }
+  rules.innerHTML = `Max drawdown: <b>${cfg.maxDD}%</b> · Daily loss: <b>${cfg.dailyLoss}%</b> · Profit target: <b>${cfg.target}%</b> of account.`;
+}
+
+function updateOnboardCalcHint() {
+  const hint = document.getElementById('onb-calc-hint');
+  const firm = document.getElementById('onb-firm') && document.getElementById('onb-firm').value;
+  const bal = parseFloat(document.getElementById('onb-balance').value) || 0;
+  const cfg = PROP_FIRMS[firm || 'Other'];
+  if (!hint || !cfg || cfg.maxDD == null || !bal) {
+    if (hint) hint.textContent = '';
+    return;
+  }
+  const maxDD = (bal * cfg.maxDD / 100).toFixed(2);
+  const daily = (bal * cfg.dailyLoss / 100).toFixed(2);
+  const tgt = (bal * cfg.target / 100).toFixed(2);
+  hint.textContent = `Auto limits: Max DD $${maxDD} · Daily $${daily} · Target $${tgt}`;
+}
+
+function onboardPrev() {
+  if (onboardStep > 1) { onboardStep--; renderOnboardStep(); }
+}
+
+function onboardNext() {
+  if (onboardStep === 1) {
+    const f = document.getElementById('onb-firm');
+    if (!f || !f.value) { alert('Please select your prop firm.'); return; }
+    onboardStep++;
+    renderOnboardStep();
+    return;
+  }
+  if (onboardStep === 2) {
+    const bal = parseFloat(document.getElementById('onb-balance').value);
+    const pnl = parseFloat(document.getElementById('onb-pnl').value);
+    if (!Number.isFinite(bal) || bal <= 0) { alert('Enter a valid account balance.'); return; }
+    prop.account = bal - (Number.isFinite(pnl) ? pnl : 0);
+    prop.pnl = Number.isFinite(pnl) ? pnl : prop.pnl;
+    prop.propFirm = document.getElementById('onb-firm').value;
+    const cfg = PROP_FIRMS[prop.propFirm];
+    if (cfg && cfg.maxDD != null) {
+      prop.maxDD = Math.round(bal * (cfg.maxDD / 100) * 100) / 100;
+      prop.daily = Math.round(bal * (cfg.dailyLoss / 100) * 100) / 100;
+      prop.target = Math.round(bal * (cfg.target / 100) * 100) / 100;
+    }
+    savePropLocal();
+    renderPropBar();
+    updateRisk();
+    onboardStep++;
+    renderOnboardStep();
+    return;
+  }
+  const q = (document.getElementById('onb-first-q') && document.getElementById('onb-first-q').value.trim()) ||
+    'Give me a pre-session brief for today';
+  localStorage.setItem('aria_onboarded', 'true');
+  closeOnboarding();
+  sessionStorage.setItem('aria_upgrade_ack', '1');
+  document.getElementById('chatTa').value = q;
+  growTa(document.getElementById('chatTa'));
+  send();
+}
+
+function animateRiskScoreTo(target) {
+  const el = document.getElementById('riskNum');
+  if (!el) return;
+  const start = typeof displayedRiskScore === 'number' ? displayedRiskScore : 0;
+  if (start === target) { el.textContent = target; displayedRiskScore = target; return; }
+  riskCountUpToken++;
+  const token = riskCountUpToken;
+  const t0 = performance.now();
+  const dur = 600;
+  function frame(now) {
+    if (token !== riskCountUpToken) return;
+    const p = Math.min(1, (now - t0) / dur);
+    const v = Math.round(start + (target - start) * p);
+    el.textContent = v;
+    if (p < 1) requestAnimationFrame(frame);
+    else displayedRiskScore = target;
+  }
+  requestAnimationFrame(frame);
+}
+
+/* ── PROP BAR ──────────────────────────────────────────── */
+function renderPropBar() {
+  const { account, pnl, target, daily, dailyUsed } = prop;
+  const balance = account + pnl;
+  const dailyLeft = daily - dailyUsed;
+  const ddPct = Math.abs(Math.min(0, pnl)) / prop.maxDD;
+
+  document.getElementById('ps-balance').textContent = '$' + balance.toLocaleString();
+
+  const pnlEl = document.getElementById('ps-pnl');
+  pnlEl.textContent = (pnl >= 0 ? '+' : '−') + '$' + Math.abs(pnl);
+  pnlEl.className = 'prop-stat-value ' + (pnl >= 0 ? 'pos' : 'neg');
+
+  document.getElementById('ps-target').textContent = '$' + target;
+  document.getElementById('ps-daily').textContent  = '$' + Math.max(0, dailyLeft);
+
+  const health = document.getElementById('ps-health');
+  let hKey, hText, hCls;
+  if (ddPct < 0.3)      { hKey = 'ok';  hText = '✓ HEALTHY — Within all limits';       hCls = 'prop-stat-value pos'; }
+  else if (ddPct < 0.7) { hKey = 'mid'; hText = '⚠ CAUTION — Approaching limits';      hCls = 'prop-stat-value warn'; }
+  else                  { hKey = 'bad'; hText = '✗ DANGER — Stop trading now';        hCls = 'prop-stat-value neg'; }
+  if (hKey !== lastHealthState) {
+    health.classList.remove('health-pulse');
+    void health.offsetWidth;
+    health.classList.add('health-pulse');
+    lastHealthState = hKey;
+  }
+  health.textContent = hText;
+  health.className = hCls;
+}
+
+function editPropStat(which) {
+  const map = { balance:'account', pnl:'pnl', target:'target', daily:'daily' };
+  const propKey = map[which];
+  const elId = 'ps-' + which;
+  const el = document.getElementById(elId);
+  const cur = prop[propKey] ?? 0;
+  const input = document.createElement('input');
+  input.type = 'number';
+  input.className = 'prop-stat-input';
+  input.value = propKey === 'account' ? (prop.account + prop.pnl) : cur;
+  el.replaceWith(input);
+  input.focus(); input.select();
+  function done() {
+    const val = parseFloat(input.value);
+    if (!isNaN(val)) {
+      if (propKey === 'account') { prop.account = val - prop.pnl; }
+      else prop[propKey] = val;
+      savePropLocal();
+    }
+    renderPropBar(); updateRisk();
+  }
+  input.onblur = done;
+  input.onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); input.blur(); } };
+}
+
+function savePropLocal() {
+  localStorage.setItem('aria3_prop', JSON.stringify(prop));
+  localStorage.setItem('propFirm', prop.propFirm || 'Other');
+  localStorage.setItem('maxDrawdown', String(prop.maxDD ?? '10'));
+  localStorage.setItem('dailyLimit', String(prop.daily ?? 'not set'));
+  localStorage.setItem('balance', String((prop.account ?? 5000) + (prop.pnl ?? 0)));
+  localStorage.setItem('pnl', String(prop.pnl ?? 0));
+  localStorage.setItem('target', String(prop.target ?? 500));
+  localStorage.setItem('aria_firm', prop.propFirm || 'your prop firm');
+  localStorage.setItem('aria_balance', String((prop.account ?? 5000) + (prop.pnl ?? 0)));
+  localStorage.setItem('aria_pnl', String(prop.pnl ?? 0));
+  localStorage.setItem('aria_target', String(prop.target ?? 500));
+  localStorage.setItem('aria_maxdd', String(prop.maxDD ?? 500));
+  localStorage.setItem('aria_daily', String(prop.daily ?? 250));
+  localStorage.setItem('aria_dailyUsed', String(prop.dailyUsed ?? 0));
+}
+
+/* ── CHAT ──────────────────────────────────────────────── */
+function onKey(e) {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
+}
+
+function growTa(el) {
+  el.style.height = 'auto';
+  el.style.height = Math.min(el.scrollHeight, 120) + 'px';
+}
+
+function quick(text) {
+  document.getElementById('chatTa').value = text;
+  growTa(document.getElementById('chatTa'));
+  send();
+}
+
+async function send() {
+  if (busy) return;
+  const ta = document.getElementById('chatTa');
+  const text = ta.value.trim();
+  if (!text) return;
+
+  if (!window.__ARIA_AUTH__ || !window.__ARIA_AUTH__.user) {
+    addAriaMsg('<span style="color:var(--danger)">Sign in with Google to use ARIA.</span>');
+    return;
+  }
+
+  if (!sessionStorage.getItem('aria_upgrade_ack')) {
+    pendingSendText = text;
+    showUpgradeModal();
+    return;
+  }
+
+  ta.value = '';
+  ta.style.height = 'auto';
+  addUserMsg(text);
+  await doSendAria(text);
+}
+
+async function doSendAria(text) {
+  busy = true;
+  document.getElementById('sendBtn').disabled = true;
+  const thinkEl = addThinking();
+
+  let accessToken = window.__ARIA_AUTH__ && window.__ARIA_AUTH__.access_token;
+  if (!accessToken && typeof window.__ARIA_REFRESHAccessToken === 'function') {
+    try {
+      accessToken = await window.__ARIA_REFRESHAccessToken();
+    } catch (e) {}
+  }
+  if (!accessToken) {
+    thinkEl.remove();
+    busy = false;
+    document.getElementById('sendBtn').disabled = false;
+    addAriaMsg('<span style="color:var(--danger)">No session token. Please sign in again.</span>');
+    return;
+  }
+
+  const ist  = getIST();
+  const H = ist.getHours(), M = ist.getMinutes();
+  const mins = H*60+M;
+  let sessionCtx = 'Off Hours';
+  if (mins>=RULES.sessions[0].start&&mins<RULES.sessions[0].end)  sessionCtx = 'London (VALID — trade)';
+  else if (mins>=RULES.sessions[1].start&&mins<RULES.sessions[1].end) sessionCtx = 'New York (VALID — trade)';
+  else if (mins>=RULES.sessions[2].start&&mins<RULES.sessions[2].end) sessionCtx = 'Asian (AVOID — do not trade)';
+
+  if (!window.__liveEURUSD || !window.__liveAUDUSD) {
+    await fetchLivePrices();
+  }
+
+  const newsCtx = newsCache.slice(0, 6).map(e => `${e.title} (${e.impact} impact, ${e.currency}, ${e.istTime} IST)`).join('; ') || 'No upcoming high-impact news in filter';
+  const firm = localStorage.getItem('aria_firm') ||
+               document.querySelector('#propFirmSelect, [name="firm"]')?.value ||
+               prop.propFirm ||
+               'your prop firm';
+  const balance = parseFloat(localStorage.getItem('aria_balance') ||
+                  document.getElementById('propBalance')?.value ||
+                  String((prop.account ?? 5000) + (prop.pnl ?? 0)) || 5000);
+  const pnl = parseFloat(localStorage.getItem('aria_pnl') ||
+              document.getElementById('propPnl')?.value ||
+              String(prop.pnl ?? 0) || 0);
+  const target = parseFloat(localStorage.getItem('aria_target') ||
+                 document.getElementById('propTarget')?.value ||
+                 String(prop.target ?? 500) || 500);
+  const maxDD = parseFloat(localStorage.getItem('aria_maxdd') ||
+                document.getElementById('propMaxDD')?.value ||
+                String(prop.maxDD ?? 500) || 500);
+  const dailyLimit = parseFloat(localStorage.getItem('aria_daily') ||
+                     document.getElementById('propDailyLimit')?.value ||
+                     String(prop.daily ?? 250) || 250);
+  const dailyUsed = parseFloat(localStorage.getItem('aria_dailyUsed') ||
+                    document.getElementById('propDailyUsed')?.value ||
+                    String(prop.dailyUsed ?? 0) || 0);
+  const remaining = dailyLimit - dailyUsed;
+  const eurPrice = window.__liveEURUSD || 'not available';
+  const audPrice = window.__liveAUDUSD || 'not available';
+
+  const systemPromptAddition = await getChartContext();
+
+  const system = `You are ARIA — an elite AI trading risk intelligence system built specifically for prop firm traders.
+
+TRADER'S LIVE ACCOUNT DATA:
+- Prop firm: ${firm}
+- Account balance: $${balance}
+- Current PnL today: $${pnl}
+- Profit target: $${target}
+- Max drawdown allowed: $${maxDD}
+- Daily loss limit: $${dailyLimit}
+- Daily limit used: $${dailyUsed}
+- Daily limit remaining: $${remaining}
+
+LIVE MARKET PRICES RIGHT NOW:
+- EUR/USD: ${eurPrice}
+- AUD/USD: ${audPrice}
+${systemPromptAddition}
+YOUR ROLE:
+1. Always check their remaining daily limit before recommending any trade
+2. Use the live prices above in your analysis
+3. Give ICT/SMC analysis when asked (Order Blocks, FVGs, BOS, CHoCH, Premium/Discount)
+4. Be direct — prop traders need clear YES/NO answers
+5. Always mention their specific prop firm rules
+6. If they're in danger zone (PnL near max DD), tell them to STOP trading immediately
+7. Never say "I don't have access to prices" — you have them above
+
+SESSION CONTEXT:
+- IST time: ${pad(H)}:${pad(M)}
+- Current session: ${sessionCtx}
+- Upcoming news: ${newsCtx}
+
+RESPONSE FORMAT: Always structured with sections:
+MARKET CONTEXT → TRADE SETUP → RISK CHECK → RECOMMENDATION`;
+
+  chatHist.push({ role: 'user', content: text });
+
+  const payload = {
+    system,
+    messages: chatHist.slice(-14),
+  };
+
+  try {
+    const response = await fetch(ARIA_WORKER_API_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: 'Bearer ' + accessToken,
+      },
+      body: JSON.stringify(payload),
+    });
+
+    const rawText = await response.text();
+    let data = {};
+    if (rawText) {
+      try {
+        data = JSON.parse(rawText);
+      } catch (parseErr) {
+        console.error('ARIA proxy non-JSON body:', parseErr, rawText.slice(0, 200));
+        thinkEl.remove();
+        chatHist.pop();
+        addAriaMsg(
+          '<span style="color:var(--danger)">Error: ARIA proxy returned invalid JSON (HTTP ' + response.status + ').</span>'
+        );
+        return;
+      }
+    }
+
+    thinkEl.remove();
+
+    if (!response.ok) {
+      chatHist.pop();
+      const err = data.error;
+      const errMsg =
+        (typeof err === 'string' ? err : err && err.message) ||
+        data.message ||
+        data.detail ||
+        'Request failed (HTTP ' + response.status + ')';
+      console.error('ARIA proxy error:', response.status, data);
+      addAriaMsg('<span style="color:var(--danger)">Error: ' + esc(String(errMsg)) + '</span>');
+      return;
+    }
+
+    const reply =
+      (data.content && data.content[0] && data.content[0].text) ||
+      (typeof data.text === 'string' ? data.text : '') ||
+      '';
+
+    if (!reply) {
+      chatHist.pop();
+      console.warn('ARIA empty reply payload:', data);
+      addAriaMsg('<span style="color:var(--danger)">Empty response from ARIA. Check worker logs and API key.</span>');
+    } else {
+      chatHist.push({ role: 'assistant', content: reply });
+      addAriaMsg(formatReply(reply));
+      autoLogSignal(text, reply);
+      updateRisk();
+    }
+  } catch (e) {
+    thinkEl.remove();
+    chatHist.pop();
+    const msg = e && e.message ? e.message : String(e);
+    console.error('ARIA fetch failed:', e);
+    addAriaMsg(
+      '<span style="color:var(--danger)">Network error: ' + esc(msg) + '</span>' +
+      '<br><span style="color:var(--muted);font-size:12px">Confirm URL <code style="font-size:11px">' +
+      esc(ARIA_WORKER_API_URL) +
+      '</code> is reachable (HTTPS), CORS allows your origin, and nothing is blocking the request.</span>'
+    );
+  } finally {
+    busy = false;
+    document.getElementById('sendBtn').disabled = false;
+  }
+}
+
+function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+function formatReply(text) {
+  let h = esc(text);
+  // Headers
+  h = h.replace(/^#{1,3} (.+)$/gm, '<div class="r-section">$1</div>');
+  // Bold / italic
+  h = h.replace(/\*\*(.+?)\*\*/g, '<b>$1</b>');
+  h = h.replace(/\*(.+?)\*/g,     '<i>$1</i>');
+  h = h.replace(/`(.+?)`/g,       '<code style="font-family:var(--sf-mono);font-size:12px;background:var(--card2);padding:1px 5px;border-radius:4px;color:var(--amber)">$1</code>');
+  // Keywords
+  h = h.replace(/\b(BUY|LONG)\b/g,  '<span class="inline-tag t-buy">$1</span>');
+  h = h.replace(/\b(SELL|SHORT)\b/g,'<span class="inline-tag t-sell">$1</span>');
+  h = h.replace(/\b(BULLISH)\b/g,   '<span class="inline-tag t-buy">BULLISH</span>');
+  h = h.replace(/\b(BEARISH)\b/g,   '<span class="inline-tag t-sell">BEARISH</span>');
+  h = h.replace(/\b(AVOID|SKIP)\b/g,'<span class="inline-tag t-skip">$1</span>');
+  h = h.replace(/\b(CAUTION|WAIT|WARNING)\b/g,'<span class="inline-tag t-warn">$1</span>');
+  // Bullets
+  h = h.replace(/^[-•] (.+)$/gm, '<div style="padding:3px 0 3px 12px;border-left:2px solid var(--border2);margin:2px 0;font-size:13px;color:var(--muted)">$1</div>');
+  // Newlines
+  h = h.replace(/\n\n/g,'<br><br>').replace(/\n/g,'<br>');
+  return h;
+}
+
+function autoLogSignal(query, reply) {
+  // Try to extract pair and direction from ARIA reply
+  const pairs = ['EURUSD','AUDUSD','GBPUSD','USDJPY','XAUUSD','NZDUSD','USDCAD','EURGBP'];
+  let pair = null;
+  for (const p of pairs) { if (query.toUpperCase().includes(p) || reply.toUpperCase().includes(p)) { pair = p; break; } }
+  if (!pair) return;
+
+  const upperReply = reply.toUpperCase();
+  let dir = 'INFO';
+  if (upperReply.includes('BUY') || upperReply.includes('LONG') || upperReply.includes('BULLISH')) dir = 'BUY';
+  else if (upperReply.includes('SELL') || upperReply.includes('SHORT') || upperReply.includes('BEARISH')) dir = 'SELL';
+  else if (upperReply.includes('SKIP') || upperReply.includes('AVOID') || upperReply.includes('WAIT')) dir = 'SKIP';
+
+  // Confidence: count bullish/bearish signals
+  const bullCount = (reply.match(/bullish|buy|long|support|demand/gi) || []).length;
+  const bearCount = (reply.match(/bearish|sell|short|resistance|supply/gi) || []).length;
+  const total = bullCount + bearCount;
+  const conf = total ? Math.min(95, Math.round((Math.max(bullCount,bearCount)/total)*100)) : 65;
+
+  const ist = getIST();
+  const sig = { pair, dir, conf, time: `${pad(ist.getHours())}:${pad(ist.getMinutes())}`, result: '—', id: Date.now() };
+  signals.unshift(sig);
+  if (signals.length > 20) signals.pop();
+  localStorage.setItem('aria3_signals', JSON.stringify(signals));
+  renderSignals();
+}
+
+function addUserMsg(text) {
+  const c = document.getElementById('messages');
+  const d = document.createElement('div');
+  d.className = 'msg-in msg-u';
+  d.innerHTML = `<div class="msg-u-bubble">${esc(text)}</div>`;
+  c.appendChild(d);
+  scrollMsgs();
+}
+
+function addAriaMsg(html) {
+  const c = document.getElementById('messages');
+  const d = document.createElement('div');
+  d.className = 'msg-in msg-a';
+  d.innerHTML = `<div class="msg-a-dot">AR</div><div class="msg-a-body">${html}</div>`;
+  c.appendChild(d);
+  scrollMsgs();
+}
+
+function addThinking() {
+  const c = document.getElementById('messages');
+  const d = document.createElement('div');
+  d.className = 'msg-in msg-a';
+  d.innerHTML = `<div class="msg-a-dot">AR</div>
+    <div class="thinking">
+      <div class="thr-dots"><div class="thr-d"></div><div class="thr-d"></div><div class="thr-d"></div></div>
+      <span>Analysing…</span>
+    </div>`;
+  c.appendChild(d);
+  scrollMsgs();
+  return d;
+}
+
+function scrollMsgs() {
+  const c = document.getElementById('messages');
+  c.scrollTop = c.scrollHeight;
+  // also scroll section into view on mobile
+  document.getElementById('sec-chat').scrollIntoView({ behavior:'smooth', block:'nearest' });
+}
+
+/* ── CALCULATOR ────────────────────────────────────────── */
+function calcUpdate() {
+  const entry = parseFloat(document.getElementById('c-entry').value);
+  if (isNaN(entry) || entry <= 0) {
+    document.getElementById('calcResults').classList.remove('show');
+    return;
+  }
+
+  // Determine pip value (JPY pairs = 0.01, others = 0.0001)
+  const pipVal = entry > 10 ? 0.01 : 0.0001;
+  const slPrice = (entry - RULES.slPips * pipVal).toFixed(5);
+  const tpPrice = (entry + RULES.tpPips * pipVal).toFixed(5);
+
+  document.getElementById('c-sl').textContent = slPrice;
+  document.getElementById('c-tp').textContent = tpPrice;
+  document.getElementById('c-sl-usd').textContent = '−$' + RULES.slUsd;
+  document.getElementById('c-tp-usd').textContent = '+$' + RULES.tpUsd;
+
+  // Close by time
+  const ist = getIST();
+  const closeBy = new Date(ist.getTime() + RULES.maxHold * 60000);
+  document.getElementById('c-close-time').textContent =
+    `${pad(closeBy.getHours())}:${pad(closeBy.getMinutes())} IST`;
+
+  document.getElementById('calcResults').classList.add('show');
+}
+
+function logCalcTrade(action) {
+  const entry = parseFloat(document.getElementById('c-entry').value);
+  if (isNaN(entry)) return;
+
+  if (action === 'skip') {
+    addAriaMsg('<span class="inline-tag t-skip">SKIP</span> Trade skipped. Waiting for better setup.');
+    return;
+  }
+
+  // Log as pending trade
+  const ist = getIST();
+  trades.unshift({
+    pair: 'CALC', dir: 'LONG', entry, exit: '', pnl: '',
+    result: 'OPEN', time: `${pad(ist.getHours())}:${pad(ist.getMinutes())}`,
+    id: Date.now()
+  });
+  saveTrades(); renderJournal();
+  addAriaMsg('<span class="inline-tag t-buy">TRADE LOGGED</span> Entry at <b>' + entry + '</b> · SL <b>' + (entry-10*0.0001).toFixed(5) + '</b> · TP <b>' + (entry+20*0.0001).toFixed(5) + '</b><br>Max hold: 90 min. Set your broker orders now.');
+}
+
+/* ── TIMER ─────────────────────────────────────────────── */
+function timerToggle() {
+  if (timerTick) { timerPause(); }
+  else           { timerStart(); }
+}
+
+function timerStart() {
+  if (!timerEnd) timerEnd = Date.now() + RULES.timerDur * 1000;
+  timerTick = setInterval(timerRender, 1000);
+  timerRender();
+  const btn = document.getElementById('timerBtn');
+  btn.textContent = '⏸ PAUSE TIMER'; btn.classList.add('running');
+}
+
+function timerPause() {
+  clearInterval(timerTick); timerTick = null;
+  const btn = document.getElementById('timerBtn');
+  btn.textContent = '▶ RESUME TIMER'; btn.classList.add('running');
+}
+
+function timerReset() {
+  clearInterval(timerTick); timerTick = null; timerEnd = null;
+  document.getElementById('timerNum').textContent = '2:00:00';
+  document.getElementById('timerNum').className  = 'timer-num';
+  document.getElementById('timerSub').textContent = 'Ready to start';
+  const btn = document.getElementById('timerBtn');
+  btn.textContent = '⏱ START 2HR TIMER'; btn.classList.remove('running');
+}
+
+function timerRender() {
+  const left = Math.max(0, timerEnd - Date.now());
+  const secs = Math.floor(left / 1000);
+  const h = Math.floor(secs/3600), m = Math.floor((secs%3600)/60), s = secs%60;
+  const el = document.getElementById('timerNum');
+  el.textContent = `${h}:${pad(m)}:${pad(s)}`;
+
+  if (left === 0) {
+    clearInterval(timerTick); timerTick = null;
+    el.className = 'timer-num expired';
+    document.getElementById('timerSub').textContent = '🔴 SETUP EXPIRED — SKIP THIS TRADE';
+    const btn = document.getElementById('timerBtn');
+    btn.textContent = '⏱ START NEW TIMER'; btn.classList.remove('running');
+    timerEnd = null;
+    return;
+  }
+
+  if (secs < 1800)      { el.className = 'timer-num expired'; document.getElementById('timerSub').textContent = '⚠️ Less than 30 min — consider skipping'; }
+  else if (secs < 3600) { el.className = 'timer-num warn';    document.getElementById('timerSub').textContent = 'Under 1 hour remaining'; }
+  else                  { el.className = 'timer-num';         document.getElementById('timerSub').textContent = 'Setup window active'; }
+}
+
+/* ── NEWS FEED ─────────────────────────────────────────── */
+async function loadNews() {
+  const badge = document.getElementById('newsBadge');
+  const body = document.getElementById('newsBody');
+  badge.innerHTML = '<span class="skeleton-line" style="display:inline-block;width:56px;height:10px;margin:0;vertical-align:middle"></span>';
+  body.innerHTML = '<div class="skeleton-line" style="width:92%"></div><div class="skeleton-line" style="width:78%"></div><div class="skeleton-line" style="width:85%"></div>';
+  try {
+    const r = await fetch('https://nfs.faireconomy.media/ff_calendar_thisweek.json');
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    let data = await r.json();
+    if (!Array.isArray(data)) data = data.events || data.data || [];
+
+    const allowed = new Set(['EUR', 'USD', 'AUD', 'GBP']);
+    const nowMs = Date.now();
+
+    const todayKolkata = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+    const events = data.map(raw => {
+      const title = raw.title || raw.name || raw.event || 'Event';
+      let cur = String(raw.country || raw.currency || raw.Currency || '').toUpperCase().replace(/\s/g, '');
+      if (cur.length > 3) cur = cur.slice(0, 3);
+      const impactRaw = raw.impact || raw.Impact || raw.importance || '';
+      const impact = String(impactRaw).toLowerCase();
+      const dateStr = raw.date || raw.time || raw.datetime || raw.start;
+      const utcDate = new Date(dateStr);
+      if (isNaN(utcDate.getTime())) return null;
+      const istTimeStr = utcDate.toLocaleTimeString('en-GB', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', hour12: false });
+      const istDayStr = utcDate.toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+      return {
+        title,
+        currency: cur || '?',
+        impact,
+        utcMs: utcDate.getTime(),
+        istTime: istTimeStr,
+        istDay: istDayStr === todayKolkata ? 'Today' : istDayStr,
+      };
+    }).filter(Boolean)
+      .filter(e => e.impact === 'high' && allowed.has(e.currency))
+      .filter(e => e.utcMs > nowMs - 60000)
+      .sort((a, b) => a.utcMs - b.utcMs);
+
+    newsCache = events;
+    renderNews(events, nowMs);
+    badge.textContent = events.length ? events.length + ' high-impact' : 'No events';
+    updateRisk();
+  } catch (e) {
+    newsCache = [];
+    badge.textContent = '—';
+    document.getElementById('newsNextRow').style.display = 'none';
+    body.innerHTML = '<div class="news-empty">Calendar temporarily unavailable</div>';
+    updateRisk();
+  }
+}
+
+function renderNews(events, nowMs) {
+  const body = document.getElementById('newsBody');
+  const warn = document.getElementById('newsWarnBar');
+
+  if (!events.length) { body.innerHTML = '<div class="news-empty">No high-impact EUR/USD/AUD/GBP events scheduled ahead.</div>'; return; }
+
+  let warnItem = null;
+  let html = '';
+  for (const e of events) {
+    const diffMs  = e.utcMs - nowMs;
+    const diffMin = Math.round(diffMs / 60000);
+    let countdownText, countdownClass;
+    if (diffMin < 0)       { countdownText = 'Past'; countdownClass = 'far'; }
+    else if (diffMin < 30) { countdownText = `${diffMin}m`; countdownClass = 'soon'; warnItem = e; }
+    else if (diffMin < 120){ countdownText = `${diffMin}m`; countdownClass = 'near'; }
+    else {
+      const hrs = Math.floor(diffMin/60), mins2 = diffMin%60;
+      countdownText = `${hrs}h ${mins2}m`; countdownClass = 'far';
+    }
+
+    html += `
+      <div class="news-item">
+        <div class="news-impact high"></div>
+        <div class="news-info">
+          <div class="news-title">${esc(e.title)} <span class="impact-badge-hi">HIGH</span></div>
+          <div class="news-meta">${esc(e.currency)} · ${esc(e.istDay)} ${esc(e.istTime)} IST</div>
+        </div>
+        <div class="news-right">
+          <div class="news-countdown ${countdownClass}">${countdownText}</div>
+        </div>
+      </div>`;
+  }
+  body.innerHTML = html;
+
+  if (warnItem) {
+    document.getElementById('newsWarnText').textContent =
+      `⚠️ ${warnItem.currency} ${warnItem.title} in <30 min — Consider waiting`;
+    warn.classList.add('show');
+  } else {
+    warn.classList.remove('show');
+  }
+}
+
+/* ── SIGNALS ───────────────────────────────────────────── */
+function renderSignals() {
+  const body = document.getElementById('signalBody');
+  const count = document.getElementById('signalCount');
+  count.textContent = signals.length + ' signal' + (signals.length!==1?'s':'');
+  if (!signals.length) {
+    body.innerHTML = '<div class="signal-empty">No signals yet. Ask ARIA for pair analysis.</div>';
+    return;
+  }
+  body.innerHTML = signals.slice(0,10).map(s => {
+    const dirClass = s.dir==='BUY'?'buy':s.dir==='SELL'?'sell':'skip';
+    const resultIco = s.result==='WIN'?'✅':s.result==='LOSS'?'❌':s.result==='BE'?'↔️':'—';
+    return `<div class="signal-row">
+      <span class="sig-pair">${s.pair}</span>
+      <span class="sig-dir ${dirClass}">${s.dir}</span>
+      <span class="sig-conf">${s.conf}% conf</span>
+      <span class="sig-time">${s.time}</span>
+      <span class="sig-result">${resultIco}</span>
+      <button onclick="cycleSignalResult(${s.id})" style="background:none;border:1px solid var(--border);border-radius:4px;padding:3px 8px;color:var(--muted);cursor:pointer;font-size:10px;font-family:var(--sf-mono)">Edit</button>
+    </div>`;
+  }).join('');
+}
+
+function cycleSignalResult(id) {
+  const sig = signals.find(s=>s.id===id);
+  if (!sig) return;
+  const cycle = ['—','WIN','LOSS','BE','SKIP'];
+  sig.result = cycle[(cycle.indexOf(sig.result)+1) % cycle.length];
+  localStorage.setItem('aria3_signals', JSON.stringify(signals));
+  renderSignals();
+}
+
+/* ── JOURNAL ───────────────────────────────────────────── */
+function toggleJournalForm() {
+  const f = document.getElementById('journalForm');
+  f.classList.toggle('show');
+  if (f.classList.contains('show')) document.getElementById('j-pair').focus();
+}
+
+function addJournalTrade() {
+  const pair   = document.getElementById('j-pair').value.toUpperCase().trim();
+  const dir    = document.getElementById('j-dir').value;
+  const result = document.getElementById('j-result').value;
+  const entry  = document.getElementById('j-entry').value;
+  const exit   = document.getElementById('j-exit').value;
+  const pnl    = parseFloat(document.getElementById('j-pnl').value) || (result==='WIN'?50:result==='LOSS'?-25:0);
+  if (!pair) return;
+  const ist = getIST();
+  trades.unshift({ pair, dir, entry, exit, pnl, result, time:`${pad(ist.getHours())}:${pad(ist.getMinutes())}`, id:Date.now() });
+  saveTrades(); renderJournal();
+  // clear
+  ['j-pair','j-entry','j-exit','j-pnl'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('journalForm').classList.remove('show');
+}
+
+function deleteJournalTrade(id) {
+  trades = trades.filter(t=>t.id!==id);
+  saveTrades(); renderJournal();
+}
+
+function saveTrades() { localStorage.setItem('aria3_trades', JSON.stringify(trades)); }
+
+function renderJournal() {
+  const body = document.getElementById('journalBody');
+  document.getElementById('journalCount').textContent = trades.length + ' trade' + (trades.length!==1?'s':'');
+
+  if (!trades.length) {
+    body.innerHTML = '<tr><td colspan="8"><div class="journal-empty">No trades logged.</div></td></tr>';
+    updateJStats(); return;
+  }
+
+  body.innerHTML = trades.slice(0,20).map(t => {
+    const pnlClass = t.pnl>0?'pnl-pos':t.pnl<0?'pnl-neg':'';
+    const pnlStr   = t.pnl !== '' ? (t.pnl>=0?'+':'')+'$'+Math.abs(t.pnl) : '—';
+    const resIco   = t.result==='WIN'?'✅':t.result==='LOSS'?'❌':t.result==='BE'?'↔️':t.result==='OPEN'?'🔵':'—';
+    const dirClass = t.dir==='BUY'?'buy':'sell';
+    return `<tr>
+      <td style="color:var(--cream);font-weight:600">${t.pair}</td>
+      <td><span class="sig-dir ${dirClass}" style="font-size:10px;padding:1px 6px">${t.dir}</span></td>
+      <td style="font-family:var(--sf-mono);font-size:11px">${t.entry||'—'}</td>
+      <td style="font-family:var(--sf-mono);font-size:11px">${t.exit||'—'}</td>
+      <td style="font-family:var(--sf-mono);font-size:11px;color:${t.pnl>0?'var(--success)':t.pnl<0?'var(--danger)':'var(--muted)'}">${pnlStr}</td>
+      <td>${resIco}</td>
+      <td style="font-family:var(--sf-mono);font-size:10px;color:var(--muted)">${t.time}</td>
+      <td><button class="j-del" onclick="deleteJournalTrade(${t.id})">✕</button></td>
+    </tr>`;
+  }).join('');
+  updateJStats();
+}
+
+function updateJStats() {
+  const real = trades.filter(t=>t.result==='WIN'||t.result==='LOSS');
+  const wins = trades.filter(t=>t.result==='WIN').length;
+  const wr   = real.length ? Math.round(wins/real.length*100)+'%' : '—';
+  const totalPnl = trades.reduce((s,t)=>s+(parseFloat(t.pnl)||0), 0);
+  // Best pair
+  const pairPnl = {};
+  trades.forEach(t=>{ if(!pairPnl[t.pair]) pairPnl[t.pair]=0; pairPnl[t.pair]+=(parseFloat(t.pnl)||0); });
+  const bestPair = Object.entries(pairPnl).sort((a,b)=>b[1]-a[1])[0]?.[0] || '—';
+
+  document.getElementById('js-wr').textContent = wr;
+  const pnlEl = document.getElementById('js-pnl');
+  pnlEl.textContent = totalPnl !== 0 ? (totalPnl>0?'+':'')+'$'+Math.abs(totalPnl) : '—';
+  pnlEl.className = 'jstat-val ' + (totalPnl>0?'pos':totalPnl<0?'neg':'');
+  document.getElementById('js-best').textContent = bestPair;
+}
+
+/* ── RISK SCORE ────────────────────────────────────────── */
+function updateRisk() {
+  const ist  = getIST();
+  const H    = ist.getHours(), M = ist.getMinutes();
+  const mins = H*60+M;
+
+  // 1. Session check
+  const inLondon = mins>=RULES.sessions[0].start && mins<RULES.sessions[0].end;
+  const inNY     = mins>=RULES.sessions[1].start && mins<RULES.sessions[1].end;
+  const inAsian  = mins>=RULES.sessions[2].start && mins<RULES.sessions[2].end;
+  const validSession = inLondon || inNY;
+
+  // 2. News check — any high-impact in next 30 min?
+  const nowMs = Date.now();
+  const newsRisk = newsCache.some(e => e.impact==='high' && e.utcMs>nowMs && e.utcMs<nowMs+30*60000);
+
+  // 3. Account health
+  const ddUsed = Math.abs(Math.min(0, prop.pnl));
+  const ddPct  = ddUsed / prop.maxDD;
+  const accountOk = ddPct < 0.7;
+
+  // 4. Daily limit
+  const dailyLeft = prop.daily - prop.dailyUsed;
+  const dailyOk   = dailyLeft >= RULES.slUsd;
+
+  // 5. Asian block
+  const asianOk = !inAsian;
+
+  // Score: 0-10
+  let score = 10;
+  if (!validSession) score -= 3;
+  if (inAsian)       score -= 3;
+  if (newsRisk)      score -= 2;
+  if (!accountOk)    score -= 2;
+  if (!dailyOk)      score -= 2;
+  score = Math.max(0, Math.min(10, score));
+
+  const pct = (score/10) * 360;
+  let bandColor = 'var(--success)';
+  if (score >= 9) bandColor = 'var(--danger)';
+  else if (score >= 7) bandColor = '#FF9500';
+  else if (score >= 4) bandColor = '#FFB300';
+  document.getElementById('riskCircle').style.background =
+    `conic-gradient(${bandColor} ${pct}deg, var(--border) ${pct}deg)`;
+  animateRiskScoreTo(score);
+
+  let label, sub, labelCls = '';
+  if (score <= 3)        { label = 'LOW RISK — Good to trade';       sub = 'Favourable conditions for disciplined execution.'; labelCls = 'risk-g-low'; }
+  else if (score <= 6)   { label = 'MEDIUM RISK — Trade carefully'; sub = 'Mixed context — reduce size and wait for clarity.'; labelCls = 'risk-g-med'; }
+  else if (score <= 8)   { label = 'HIGH RISK — Reduce size';       sub = 'Several headwinds — cut risk or stand aside.'; labelCls = 'risk-g-high'; }
+  else                   { label = 'EXTREME RISK — Do not trade';   sub = 'Multiple red flags. Preserve capital.'; labelCls = 'risk-g-ext'; }
+
+  const rl = document.getElementById('riskLabel');
+  rl.textContent = label;
+  rl.className = 'risk-score-label ' + labelCls;
+  document.getElementById('riskSub').textContent   = sub;
+  document.getElementById('riskBadge').textContent = score + '/10';
+
+  setRiskCheck('rc-session', validSession, validSession?'Valid':'Invalid – No Trade', !validSession&&!inAsian?'warn':'');
+  setRiskCheck('rc-news',    !newsRisk,    newsRisk?'High Impact <30m':'Clear',        newsRisk?'warn':'');
+  setRiskCheck('rc-account', accountOk,    accountOk?'Healthy ($'+Math.round((1-ddPct)*100)+'% left)':'Near limit!');
+  setRiskCheck('rc-daily',   dailyOk,      dailyOk?'$'+dailyLeft+' remaining':'Daily limit hit!');
+  setRiskCheck('rc-asian',   asianOk,      inAsian?'IN ASIAN — AVOID':'Not Asian ✓');
+}
+
+function setRiskCheck(id, ok, text, forceMid) {
+  const el = document.getElementById(id);
+  el.textContent = text;
+  el.className   = 'risk-check-status ' + (forceMid==='warn' ? 'rcs-warn' : ok ? 'rcs-ok' : 'rcs-bad');
+}
+
+/* ── SETTINGS MODAL ────────────────────────────────────── */
+function openModal() {
+  syncModalProp();
+  syncReferralLink();
+  document.getElementById('modalOverlay').classList.add('open');
+}
+function closeModal() { document.getElementById('modalOverlay').classList.remove('open'); }
+function closeModalOutside(e) { if (e.target===document.getElementById('modalOverlay')) closeModal(); }
+
+function saveKey() {
+  const inp = document.getElementById('apiInput');
+  if (!inp) return;
+  const val = inp.value.trim();
+  if (!val) return;
+  apiKey = val;
+  localStorage.setItem('aria3_key', apiKey);
+  refreshAriaConnectionUI();
+}
+
+function onKeyConnected() {
+  refreshAriaConnectionUI();
+}
+
+function showStatus(msg, ok) {
+  const el = document.getElementById('apiStatusMsg');
+  if (!el) return;
+  el.textContent = msg;
+  el.className = 'api-status-msg ' + (ok?'ok':'err');
+  el.style.display = 'block';
+  if (ok) setTimeout(closeModal, 1800);
+}
+
+function syncModalProp() {
+  document.getElementById('m-account').value  = prop.account;
+  document.getElementById('m-pnl').value      = prop.pnl;
+  document.getElementById('m-target').value   = prop.target;
+  document.getElementById('m-maxdd').value    = prop.maxDD;
+  document.getElementById('m-daily').value    = prop.daily;
+  document.getElementById('m-dailyused').value= prop.dailyUsed;
+  const fs = document.getElementById('m-prop-firm');
+  if (fs) {
+    const pf = prop.propFirm && Object.prototype.hasOwnProperty.call(PROP_FIRMS, prop.propFirm) ? prop.propFirm : 'Other';
+    fs.value = pf;
+  }
+}
+
+function saveProp() {
+  const fs = document.getElementById('m-prop-firm');
+  if (fs) prop.propFirm = fs.value || 'Other';
+  prop.account   = parseFloat(document.getElementById('m-account').value)   || prop.account;
+  prop.pnl       = parseFloat(document.getElementById('m-pnl').value)       ?? prop.pnl;
+  prop.target    = parseFloat(document.getElementById('m-target').value)    || prop.target;
+  prop.maxDD     = parseFloat(document.getElementById('m-maxdd').value)     || prop.maxDD;
+  prop.daily     = parseFloat(document.getElementById('m-daily').value)     || prop.daily;
+  prop.dailyUsed = parseFloat(document.getElementById('m-dailyused').value) || prop.dailyUsed;
+  savePropLocal();
+  renderPropBar();
+  updateRisk();
+  closeModal();
+}
+
+
+
+/* ═══════════════════════════════════════════════════════
+   LIVE DATA ENGINE
+   Finnhub forex rates live feed for EURUSD/AUDUSD.
+═══════════════════════════════════════════════════════ */
+
+const PRICE_POLL_MS = 30000;
+const PIP_SIZE = 0.0001;
+
+let lastPrices = { EURUSD: null, AUDUSD: null };
+
+async function fetchLivePrices() {
+  try {
+    const res = await fetch(`${ARIA_SERVER_URL}/latest`);
+    if (!res.ok) throw new Error('Server offline');
+    const data = await res.json();
+
+    if (data.EURUSD) {
+      const price = parseFloat(data.EURUSD.price);
+      const last = lastPrices.EURUSD;
+      const pips = last ? ((price - last) * 10000).toFixed(1) : '0.0';
+      const dir = last ? (price > last ? '▲' : price < last ? '▼' : '—') : '—';
+      const dirColor = dir === '▲' ? '#00C896' : dir === '▼' ? '#FF4757' : '#888';
+
+      const ist = new Date(Date.now() + 19800000);
+      const t = `${String(ist.getUTCHours()).padStart(2,'0')}:${String(ist.getUTCMinutes()).padStart(2,'0')}:${String(ist.getUTCSeconds()).padStart(2,'0')}`;
+
+      updateEURDisplay(price.toFixed(5), pips, dir, dirColor, t, data.EURUSD.bias);
+      lastPrices.EURUSD = price;
+      window.__liveEURUSD = price.toFixed(5);
+      window.__eurBias = data.EURUSD.bias;
+      window.__eurRSI = data.EURUSD.rsi;
+    }
+
+    const audPayload =
+      data.AUDUSD != null && typeof data.AUDUSD === 'object'
+        ? data.AUDUSD
+        : data.audusd != null && typeof data.audusd === 'object'
+          ? data.audusd
+          : null;
+    if (audPayload != null && audPayload.price != null && audPayload.price !== '') {
+      const rawP = audPayload.price;
+      const price =
+        typeof rawP === 'number' ? rawP : parseFloat(String(rawP).replace(/,/g, ''));
+      if (Number.isFinite(price)) {
+        const last = lastPrices.AUDUSD;
+        const pips = last != null ? ((price - last) * 10000).toFixed(1) : '0.0';
+        const dir = last != null ? (price > last ? '▲' : price < last ? '▼' : '—') : '—';
+        const dirColor = dir === '▲' ? '#00C896' : dir === '▼' ? '#FF4757' : '#888';
+
+        const ist = new Date(Date.now() + 19800000);
+        const t = `${String(ist.getUTCHours()).padStart(2, '0')}:${String(ist.getUTCMinutes()).padStart(2, '0')}:${String(ist.getUTCSeconds()).padStart(2, '0')}`;
+
+        updateAUDDisplay(price.toFixed(5), pips, dir, dirColor, t, audPayload.bias);
+        lastPrices.AUDUSD = price;
+        window.__liveAUDUSD = price.toFixed(5);
+        window.__audBias = audPayload.bias;
+        window.__audRSI = audPayload.rsi;
+      }
+    }
+
+  } catch(e) {
+    console.log('Price fetch failed, retrying...', e.message);
+  }
+}
+
+function updateEURDisplay(price, pips, dir, dirColor, time, bias) {
+  const allEls = document.querySelectorAll('*');
+  allEls.forEach(el => {
+    if (el.children.length === 0) {
+      if (el.textContent.trim() === 'connecting…' ||
+          el.textContent.trim() === 'connecting...') {
+        const parent = el.closest('[class*="eur"], [class*="EUR"]') ||
+                       el.parentElement;
+        if (parent && (parent.textContent.includes('EUR') ||
+            parent.innerHTML.includes('EUR'))) {
+          el.textContent = price;
+          el.style.cssText = 'color:#F1F5F9;font-family:monospace;font-size:inherit';
+        }
+      }
+    }
+  });
+
+  const eurCard = document.getElementById('pi-EURUSD');
+  if (eurCard) {
+    eurCard.innerHTML = `
+      <div class="price-pair">EUR/USD <span class="price-src-dot live">●</span></div>
+      <div class="price-val">${price}</div>
+      <div class="price-meta" style="color:${dirColor}">${dir} ${Math.abs(pips)} pips</div>
+      <div class="price-meta" style="font-size:10px;color:#00C896;margin-top:2px">● LIVE · Updated ${time} IST${bias ? ` · ${bias}` : ''}</div>
+    `;
+  }
+
+  const pipEls = document.querySelectorAll('[class*="pip"], [class*="Pip"]');
+  pipEls.forEach(el => {
+    if (el.closest('[class*="eur"], [class*="EUR"]') ||
+        el.parentElement?.innerHTML?.includes('EUR')) {
+      el.innerHTML = `<span style="color:${dirColor}">${dir} ${Math.abs(pips)} pips</span>`;
+    }
+  });
+
+  const liveEls = document.querySelectorAll('[class*="live"], [class*="Live"], [class*="LIVE"]');
+  liveEls.forEach(el => {
+    if (el.closest('[class*="eur"], [class*="EUR"]') ||
+        el.textContent.includes('LIVE') ||
+        el.textContent.includes('Updated')) {
+      el.innerHTML = `<span style="color:#00C896">● LIVE</span> · Updated ${time} IST`;
+    }
+  });
+}
+
+function updateAUDDisplay(price, pips, dir, dirColor, time, bias) {
+  const audRoot = document.getElementById('pi-AUDUSD');
+  if (audRoot) {
+    audRoot.querySelectorAll('*').forEach(function (el) {
+      if (el.children.length === 0) {
+        const txt = el.textContent.trim();
+        if (txt === 'connecting…' || txt === 'connecting...') {
+          el.textContent = price;
+          el.style.cssText = 'color:#F1F5F9;font-family:monospace;font-size:inherit';
+        }
+      }
+    });
+  }
+
+  const audCard = document.getElementById('pi-AUDUSD');
+  if (audCard) {
+    audCard.innerHTML = `
+      <div class="price-pair">AUD/USD <span class="price-src-dot live">●</span></div>
+      <div class="price-val">${price}</div>
+      <div class="price-meta" style="color:${dirColor}">${dir} ${Math.abs(pips)} pips</div>
+      <div class="price-meta" style="font-size:10px;color:#00C896;margin-top:2px">● LIVE · Updated ${time} IST${bias ? ` · ${bias}` : ''}</div>
+    `;
+  }
+
+  const pipElsAud = document.querySelectorAll('[class*="pip"], [class*="Pip"]');
+  pipElsAud.forEach(function (el) {
+    if (el.closest('#pi-AUDUSD')) {
+      el.innerHTML = `<span style="color:${dirColor}">${dir} ${Math.abs(pips)} pips</span>`;
+    }
+  });
+
+  const liveElsAud = document.querySelectorAll('[class*="live"], [class*="Live"], [class*="LIVE"]');
+  liveElsAud.forEach(function (el) {
+    if (el.closest('#pi-AUDUSD')) {
+      el.innerHTML = `<span style="color:#00C896">● LIVE</span> · Updated ${time} IST`;
+    }
+  });
+}
+
+fetchLivePrices();
+setInterval(fetchLivePrices, 30000);
+
+/* ── BOTTOM NAV SCROLL ─────────────────────────────────── */
+function scrollTo(id, btn) {
+  document.getElementById(id).scrollIntoView({ behavior:'smooth', block:'start' });
+  document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+}
+
+(function() {
+  function updateClock() {
+    const ist = new Date(Date.now() + 19800000);
+    const h = String(ist.getUTCHours()).padStart(2,'0');
+    const m = String(ist.getUTCMinutes()).padStart(2,'0');
+    const s = String(ist.getUTCSeconds()).padStart(2,'0');
+    const mins = ist.getUTCHours()*60 + ist.getUTCMinutes();
+    let session = '⚫ MARKET CLOSED';
+    if (mins>=330&&mins<690) session='🌏 ASIAN SESSION';
+    else if (mins>=810&&mins<1290) session='🟢 LONDON SESSION';
+    else if (mins>=1110||(mins>=0&&mins<60)) session='🗽 NEW YORK SESSION';
+    const el = document.querySelector('.session-time-badge') ||
+                document.querySelector('[class*="session-time"]') ||
+                document.getElementById('sessionTime');
+    const labelEl = document.getElementById('sessionLabel');
+    if (labelEl) labelEl.textContent = session;
+    if (el) el.textContent = session + ' ' + h + ':' + m + ':' + s;
+  }
+  updateClock();
+  setInterval(updateClock, 1000);
+})();
+</script>
+</body>
+</html>
