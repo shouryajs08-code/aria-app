@@ -3652,19 +3652,31 @@ async function fetchLivePrices() {
       window.__eurRSI = data.EURUSD.rsi;
     }
 
-    if (data.AUDUSD) {
-      const price = parseFloat(data.AUDUSD.price);
-      const last = lastPrices.AUDUSD;
-      const pips = last ? ((price - last) * 10000).toFixed(1) : '0.0';
-      const dir = last ? (price > last ? '▲' : price < last ? '▼' : '—') : '—';
-      const dirColor = dir === '▲' ? '#00C896' : dir === '▼' ? '#FF4757' : '#888';
+    const audPayload =
+      data.AUDUSD != null && typeof data.AUDUSD === 'object'
+        ? data.AUDUSD
+        : data.audusd != null && typeof data.audusd === 'object'
+          ? data.audusd
+          : null;
+    if (audPayload != null && audPayload.price != null && audPayload.price !== '') {
+      const rawP = audPayload.price;
+      const price =
+        typeof rawP === 'number' ? rawP : parseFloat(String(rawP).replace(/,/g, ''));
+      if (Number.isFinite(price)) {
+        const last = lastPrices.AUDUSD;
+        const pips = last != null ? ((price - last) * 10000).toFixed(1) : '0.0';
+        const dir = last != null ? (price > last ? '▲' : price < last ? '▼' : '—') : '—';
+        const dirColor = dir === '▲' ? '#00C896' : dir === '▼' ? '#FF4757' : '#888';
 
-      const ist = new Date(Date.now() + 19800000);
-      const t = `${String(ist.getUTCHours()).padStart(2,'0')}:${String(ist.getUTCMinutes()).padStart(2,'0')}:${String(ist.getUTCSeconds()).padStart(2,'0')}`;
+        const ist = new Date(Date.now() + 19800000);
+        const t = `${String(ist.getUTCHours()).padStart(2, '0')}:${String(ist.getUTCMinutes()).padStart(2, '0')}:${String(ist.getUTCSeconds()).padStart(2, '0')}`;
 
-      updateAUDDisplay(price.toFixed(5), pips, dir, dirColor, t, data.AUDUSD.bias);
-      lastPrices.AUDUSD = price;
-      window.__liveAUDUSD = price.toFixed(5);
+        updateAUDDisplay(price.toFixed(5), pips, dir, dirColor, t, audPayload.bias);
+        lastPrices.AUDUSD = price;
+        window.__liveAUDUSD = price.toFixed(5);
+        window.__audBias = audPayload.bias;
+        window.__audRSI = audPayload.rsi;
+      }
     }
 
   } catch(e) {
@@ -3718,21 +3730,18 @@ function updateEURDisplay(price, pips, dir, dirColor, time, bias) {
 }
 
 function updateAUDDisplay(price, pips, dir, dirColor, time, bias) {
-  const allEls = document.querySelectorAll('*');
-  allEls.forEach(el => {
-    if (el.children.length === 0) {
-      if (el.textContent.trim() === 'connecting…' ||
-          el.textContent.trim() === 'connecting...') {
-        const parent = el.closest('[class*="aud"], [class*="AUD"]') ||
-                       el.parentElement;
-        if (parent && (parent.textContent.includes('AUD') ||
-            parent.innerHTML.includes('AUD'))) {
+  const audRoot = document.getElementById('pi-AUDUSD');
+  if (audRoot) {
+    audRoot.querySelectorAll('*').forEach(function (el) {
+      if (el.children.length === 0) {
+        const txt = el.textContent.trim();
+        if (txt === 'connecting…' || txt === 'connecting...') {
           el.textContent = price;
           el.style.cssText = 'color:#F1F5F9;font-family:monospace;font-size:inherit';
         }
       }
-    }
-  });
+    });
+  }
 
   const audCard = document.getElementById('pi-AUDUSD');
   if (audCard) {
@@ -3743,6 +3752,20 @@ function updateAUDDisplay(price, pips, dir, dirColor, time, bias) {
       <div class="price-meta" style="font-size:10px;color:#00C896;margin-top:2px">● LIVE · Updated ${time} IST${bias ? ` · ${bias}` : ''}</div>
     `;
   }
+
+  const pipElsAud = document.querySelectorAll('[class*="pip"], [class*="Pip"]');
+  pipElsAud.forEach(function (el) {
+    if (el.closest('#pi-AUDUSD')) {
+      el.innerHTML = `<span style="color:${dirColor}">${dir} ${Math.abs(pips)} pips</span>`;
+    }
+  });
+
+  const liveElsAud = document.querySelectorAll('[class*="live"], [class*="Live"], [class*="LIVE"]');
+  liveElsAud.forEach(function (el) {
+    if (el.closest('#pi-AUDUSD')) {
+      el.innerHTML = `<span style="color:#00C896">● LIVE</span> · Updated ${time} IST`;
+    }
+  });
 }
 
 fetchLivePrices();
