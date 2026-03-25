@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ARIA — AI Risk Intelligence for Prop Traders</title>
+  <meta name="description" content="The AI trading co-pilot for prop firm traders. Pre-session briefs, live risk score, prop firm limits, ICT/SMC analysis." />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            aria: {
+              bg: '#0A0A0F',
+              blue: '#1A56DB',
+              card: '#12121a',
+              border: '#1e293b',
+            },
+          },
+        },
+      },
+    };
+  </script>
+  <style>
+    html { scroll-behavior: smooth; }
+    body { background-color: #0A0A0F; }
+    details summary::-webkit-details-marker { display: none; }
+    details summary { list-style: none; }
+  </style>
+</head>
+<body class="min-h-screen text-gray-100 antialiased bg-[#0A0A0F]">
+
+  <!-- ═══ SECTION 1 — NAV ═══ -->
+  <header class="sticky top-0 z-50 border-b border-white/10 bg-[#0A0A0F]/95 backdrop-blur-md">
+    <nav class="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-4 sm:px-6">
+      <a href="#" class="flex items-center gap-2.5">
+        <div class="flex h-9 w-9 items-center justify-center rounded bg-[#1A56DB] text-sm font-extrabold text-[#0A0A0F]">AR</div>
+        <span class="text-lg font-bold tracking-wide text-white">ARIA</span>
+      </a>
+      <div class="flex flex-wrap items-center justify-end gap-2 sm:gap-6">
+        <a href="#features" class="text-xs text-gray-400 transition hover:text-white sm:text-sm">Features</a>
+        <a href="#pricing" class="text-xs text-gray-400 transition hover:text-white sm:text-sm">Pricing</a>
+        <a href="https://shouryajs08-code.github.io/aria-app" class="text-sm text-gray-400 transition hover:text-white">Sign In</a>
+        <a href="https://shouryajs08-code.github.io/aria-app" class="rounded-lg bg-[#1A56DB] px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-[#1A56DB]/25 transition hover:bg-blue-600">Start Free</a>
+      </div>
+    </nav>
+  </header>
+
+  <main>
+    <!-- ═══ SECTION 2 — HERO ═══ -->
+    <section class="border-b border-white/5 px-4 py-16 sm:px-6 sm:py-24">
+      <div class="mx-auto grid max-w-6xl gap-12 lg:grid-cols-2 lg:items-center">
+        <div>
+          <p class="mb-4 inline-flex items-center gap-2 rounded-full border border-red-500/30 bg-red-500/10 px-3 py-1 text-xs font-medium text-red-300 sm:text-sm">
+            <span class="relative flex h-2 w-2">
+              <span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-400 opacity-75"></span>
+              <span class="relative inline-flex h-2 w-2 rounded-full bg-red-500"></span>
+            </span>
+            LIVE — 247 traders active right now
+          </p>
+          <h1 class="text-3xl font-extrabold leading-tight tracking-tight text-white sm:text-4xl lg:text-5xl">
+            The AI trading co-pilot built for<br class="hidden sm:block" /> prop firm traders
+          </h1>
+          <p class="mt-5 max-w-xl text-base leading-relaxed text-gray-400 sm:text-lg">
+            ARIA tells you when NOT to trade. Get a pre-session risk brief, track your challenge limits, and get ICT/SMC analysis — all in one dashboard.
+          </p>
+          <div class="mt-8 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+            <a href="https://shouryajs08-code.github.io/aria-app" class="inline-flex items-center justify-center rounded-xl bg-[#1A56DB] px-6 py-3.5 text-base font-semibold text-white shadow-lg shadow-[#1A56DB]/30 transition hover:bg-blue-600">
+              Start Free — No credit card
+            </a>
+            <a href="#how-it-works" class="inline-flex items-center justify-center rounded-xl border border-gray-600 px-6 py-3.5 text-base font-medium text-gray-300 transition hover:border-gray-500 hover:text-white">
+              See how it works ↓
+            </a>
+          </div>
+          <p class="mt-8 text-sm text-gray-500">
+            Used by 247+ prop traders · FTMO · MyForexFunds · The Funded Trader
+          </p>
+        </div>
+        <div class="relative lg:pl-4">
+          <div class="rounded-2xl border border-[#1e3a5f] bg-gradient-to-br from-[#12121a] to-[#0d0d14] p-6 shadow-2xl shadow-black/50 ring-1 ring-white/5">
+            <div class="mb-4 flex items-center justify-between border-b border-white/10 pb-3">
+              <span class="font-mono text-sm text-gray-300">EUR/USD <span class="text-white">1.15960</span></span>
+              <span class="rounded bg-emerald-500/20 px-2 py-0.5 text-xs font-semibold text-emerald-400">▲ LIVE</span>
+            </div>
+            <div class="mb-4 rounded-lg bg-[#1A56DB]/10 px-4 py-3">
+              <p class="text-xs uppercase tracking-wider text-gray-500">Risk Score</p>
+              <p class="mt-1 text-lg font-bold text-white">3/10 — <span class="text-emerald-400">LOW RISK</span></p>
+            </div>
+            <div class="flex items-center gap-2 text-emerald-400">
+              <span class="text-lg">✓</span>
+              <span class="font-medium">Good to trade</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══ SECTION 3 — PAIN POINTS ═══ -->
+    <section class="border-b border-white/5 px-4 py-16 sm:px-6 sm:py-20">
+      <div class="mx-auto max-w-6xl">
+        <h2 class="text-center text-2xl font-bold text-white sm:text-3xl">Why prop traders blow their challenges</h2>
+        <div class="mt-12 grid gap-6 md:grid-cols-3">
+          <div class="rounded-2xl border border-white/10 bg-[#12121a] p-6">
+            <h3 class="text-lg font-semibold text-white">Trading during news</h3>
+            <p class="mt-3 text-sm leading-relaxed text-gray-400">High-impact events spike spreads and stop hunt. Most traders don't check the calendar.</p>
+          </div>
+          <div class="rounded-2xl border border-white/10 bg-[#12121a] p-6">
+            <h3 class="text-lg font-semibold text-white">Ignoring daily limits</h3>
+            <p class="mt-3 text-sm leading-relaxed text-gray-400">One bad trade when you're already -4% daily = challenge failed.</p>
+          </div>
+          <div class="rounded-2xl border border-white/10 bg-[#12121a] p-6">
+            <h3 class="text-lg font-semibold text-white">Wrong session timing</h3>
+            <p class="mt-3 text-sm leading-relaxed text-gray-400">Trading Asian session on EUR pairs = low liquidity, fake moves.</p>
+          </div>
+        </div>
+        <p class="mt-10 text-center text-base font-medium text-[#1A56DB]">ARIA catches all three — automatically.</p>
+      </div>
+    </section>
+
+    <!-- ═══ SECTION 4 — FEATURES ═══ -->
+    <section id="features" class="border-b border-white/5 px-4 py-16 sm:px-6 sm:py-20">
+      <div class="mx-auto max-w-6xl">
+        <h2 class="text-center text-2xl font-bold text-white sm:text-3xl">Everything a prop trader needs</h2>
+        <div class="mt-12 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          <div class="rounded-2xl border border-white/10 bg-[#12121a] p-6">
+            <p class="text-2xl">🤖</p>
+            <h3 class="mt-3 font-semibold text-white">AI Pre-Session Brief</h3>
+            <p class="mt-2 text-sm text-gray-400">Every morning ARIA tells you what to watch, what to avoid, and when to trade.</p>
+          </div>
+          <div class="rounded-2xl border border-white/10 bg-[#12121a] p-6">
+            <p class="text-2xl">⚡</p>
+            <h3 class="mt-3 font-semibold text-white">Live Risk Score</h3>
+            <p class="mt-2 text-sm text-gray-400">Real-time 1-10 risk score based on your account health, session, and news.</p>
+          </div>
+          <div class="rounded-2xl border border-white/10 bg-[#12121a] p-6">
+            <p class="text-2xl">📊</p>
+            <h3 class="mt-3 font-semibold text-white">Prop Firm Tracker</h3>
+            <p class="mt-2 text-sm text-gray-400">FTMO, MFF, TFT, FundedNext rules auto-loaded. Never breach a limit again.</p>
+          </div>
+          <div class="rounded-2xl border border-white/10 bg-[#12121a] p-6">
+            <p class="text-2xl">📅</p>
+            <h3 class="mt-3 font-semibold text-white">Economic Calendar</h3>
+            <p class="mt-2 text-sm text-gray-400">Live high-impact events with 30-min alerts before they hit.</p>
+          </div>
+          <div class="rounded-2xl border border-white/10 bg-[#12121a] p-6">
+            <p class="text-2xl">💬</p>
+            <h3 class="mt-3 font-semibold text-white">ICT/SMC Analysis</h3>
+            <p class="mt-2 text-sm text-gray-400">Ask ARIA about Order Blocks, FVGs, BOS, Premium/Discount zones.</p>
+          </div>
+          <div class="rounded-2xl border border-white/10 bg-[#12121a] p-6">
+            <p class="text-2xl">📓</p>
+            <h3 class="mt-3 font-semibold text-white">Trade Journal</h3>
+            <p class="mt-2 text-sm text-gray-400">Log every trade. Track win rate, PnL, best pairs automatically.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══ SECTION 5 — HOW IT WORKS ═══ -->
+    <section id="how-it-works" class="border-b border-white/5 px-4 py-16 sm:px-6 sm:py-20">
+      <div class="mx-auto max-w-6xl">
+        <h2 class="text-center text-2xl font-bold text-white sm:text-3xl">Up and running in 2 minutes</h2>
+        <div class="mt-12 grid gap-8 md:grid-cols-3">
+          <div class="text-center">
+            <div class="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-[#1A56DB] text-lg font-bold text-white">1</div>
+            <h3 class="mt-4 font-semibold text-white">Sign in with Google</h3>
+            <p class="mt-2 text-sm text-gray-400">No setup. No API keys. Just click.</p>
+          </div>
+          <div class="text-center">
+            <div class="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-[#1A56DB] text-lg font-bold text-white">2</div>
+            <h3 class="mt-4 font-semibold text-white">Select your prop firm</h3>
+            <p class="mt-2 text-sm text-gray-400">ARIA auto-loads your challenge rules and limits.</p>
+          </div>
+          <div class="text-center">
+            <div class="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-[#1A56DB] text-lg font-bold text-white">3</div>
+            <h3 class="mt-4 font-semibold text-white">Ask ARIA anything</h3>
+            <p class="mt-2 text-sm text-gray-400">Get your pre-session brief, risk check, or trade analysis instantly.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══ SECTION 6 — PRICING ═══ -->
+    <section id="pricing" class="border-b border-white/5 px-4 py-16 sm:px-6 sm:py-20">
+      <div class="mx-auto max-w-6xl">
+        <h2 class="text-center text-2xl font-bold text-white sm:text-3xl">Simple, transparent pricing</h2>
+        <p class="mt-2 text-center text-gray-400">Less than one losing trade per month</p>
+        <div class="mt-12 grid gap-6 lg:grid-cols-3">
+          <!-- FREE -->
+          <div class="flex flex-col rounded-2xl border border-white/10 bg-[#12121a] p-6">
+            <h3 class="text-lg font-semibold text-white">Free Forever</h3>
+            <p class="mt-4 text-3xl font-bold text-white">₹0<span class="text-base font-normal text-gray-500">/mo</span></p>
+            <ul class="mt-6 flex-1 space-y-3 text-sm text-gray-400">
+              <li>10 AI queries/day</li>
+              <li>Basic trade calculator</li>
+              <li>Manual journal</li>
+              <li>No cloud sync</li>
+            </ul>
+            <a href="https://shouryajs08-code.github.io/aria-app" class="mt-8 block w-full rounded-xl border border-white/20 py-3 text-center font-semibold text-white transition hover:bg-white/5">Start Free</a>
+          </div>
+          <!-- PRO -->
+          <div class="relative flex flex-col rounded-2xl border-2 border-[#1A56DB] bg-[#12121a] p-6 shadow-xl shadow-[#1A56DB]/10">
+            <span class="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-[#1A56DB] px-3 py-0.5 text-xs font-semibold text-white">Most Popular</span>
+            <h3 class="text-lg font-semibold text-white">Pro</h3>
+            <p class="mt-4 text-3xl font-bold text-white">₹1,999<span class="text-base font-normal text-gray-500">/mo</span></p>
+            <p class="text-sm text-gray-400">or ₹17,999/yr <span class="text-emerald-400">(save 25%)</span></p>
+            <ul class="mt-6 flex-1 space-y-3 text-sm text-gray-300">
+              <li>Unlimited AI queries</li>
+              <li>Auto pre-session brief</li>
+              <li>Live economic alerts</li>
+              <li>Cloud sync all devices</li>
+              <li>All prop firm presets</li>
+              <li>Priority support</li>
+            </ul>
+            <a href="https://shouryajs08-code.github.io/aria-app" class="mt-8 block w-full rounded-xl bg-[#1A56DB] py-3 text-center font-semibold text-white transition hover:bg-blue-600">Start 7-Day Free Trial</a>
+          </div>
+          <!-- TEAM -->
+          <div class="flex flex-col rounded-2xl border border-white/10 bg-[#12121a] p-6">
+            <h3 class="text-lg font-semibold text-white">Team</h3>
+            <p class="text-sm text-gray-500">For trading groups</p>
+            <p class="mt-4 text-3xl font-bold text-white">₹4,999<span class="text-base font-normal text-gray-500">/mo</span></p>
+            <ul class="mt-6 flex-1 space-y-3 text-sm text-gray-400">
+              <li>5 trader seats</li>
+              <li>Shared signal log</li>
+              <li>Team PnL dashboard</li>
+            </ul>
+            <a href="mailto:hello@ariatrading.app?subject=ARIA%20Team%20plan" class="mt-8 block w-full rounded-xl border border-white/20 py-3 text-center font-semibold text-white transition hover:bg-white/5">Contact Us</a>
+          </div>
+        </div>
+        <p class="mt-10 flex flex-wrap items-center justify-center gap-x-4 gap-y-2 text-center text-sm text-gray-500">
+          <span>✓ Cancel anytime</span>
+          <span>✓ UPI &amp; Cards accepted</span>
+          <span>✓ 7-day money back guarantee</span>
+        </p>
+      </div>
+    </section>
+
+    <!-- ═══ SECTION 7 — TESTIMONIALS ═══ -->
+    <section class="border-b border-white/5 px-4 py-16 sm:px-6 sm:py-20">
+      <div class="mx-auto max-w-6xl">
+        <h2 class="text-center text-2xl font-bold text-white sm:text-3xl">What prop traders say</h2>
+        <div class="mt-12 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+          <div class="rounded-2xl border border-white/10 bg-[#12121a] p-5">
+            <p class="text-amber-400">⭐⭐⭐⭐⭐</p>
+            <p class="mt-3 text-sm leading-relaxed text-gray-300">"ARIA told me not to trade NFP. I listened. Saved my FTMO account that day."</p>
+            <p class="mt-4 text-xs text-gray-500">— Priya S., Mumbai · FTMO Trader</p>
+          </div>
+          <div class="rounded-2xl border border-white/10 bg-[#12121a] p-5">
+            <p class="text-amber-400">⭐⭐⭐⭐⭐</p>
+            <p class="mt-3 text-sm leading-relaxed text-gray-300">"Best ₹2000 I spend every month. The pre-session brief alone is worth it."</p>
+            <p class="mt-4 text-xs text-gray-500">— Arjun K., Delhi · MyForexFunds</p>
+          </div>
+          <div class="rounded-2xl border border-white/10 bg-[#12121a] p-5">
+            <p class="text-amber-400">⭐⭐⭐⭐⭐</p>
+            <p class="mt-3 text-sm leading-relaxed text-gray-300">"Finally a trading tool built for prop traders, not retail gamblers."</p>
+            <p class="mt-4 text-xs text-gray-500">— Vikram T., Bangalore · The Funded Trader</p>
+          </div>
+          <div class="rounded-2xl border border-white/10 bg-[#12121a] p-5">
+            <p class="text-amber-400">⭐⭐⭐⭐⭐</p>
+            <p class="mt-3 text-sm leading-relaxed text-gray-300">"Went from 3 failed challenges to passing FTMO in my first try with ARIA."</p>
+            <p class="mt-4 text-xs text-gray-500">— Rahul M., Hyderabad · FTMO Funded</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══ SECTION 8 — FAQ ═══ -->
+    <section class="border-b border-white/5 px-4 py-16 sm:px-6 sm:py-20">
+      <div class="mx-auto max-w-3xl">
+        <h2 class="text-center text-2xl font-bold text-white sm:text-3xl">Common questions</h2>
+        <div class="mt-10 space-y-3">
+          <details class="group rounded-xl border border-white/10 bg-[#12121a]">
+            <summary class="flex cursor-pointer items-center justify-between px-5 py-4 text-left font-medium text-white">
+              Which prop firms does ARIA support?
+              <span class="text-gray-500 transition group-open:rotate-180">▼</span>
+            </summary>
+            <div class="border-t border-white/10 px-5 pb-4 pt-3 text-sm leading-relaxed text-gray-400">
+              FTMO, MyForexFunds, The Funded Trader, FundedNext, Apex Trader, and more. Rules auto-load when you select your firm.
+            </div>
+          </details>
+          <details class="group rounded-xl border border-white/10 bg-[#12121a]">
+            <summary class="flex cursor-pointer items-center justify-between px-5 py-4 text-left font-medium text-white">
+              Is my trading data safe?
+              <span class="text-gray-500 transition group-open:rotate-180">▼</span>
+            </summary>
+            <div class="border-t border-white/10 px-5 pb-4 pt-3 text-sm leading-relaxed text-gray-400">
+              Yes. All data is encrypted and stored in your personal Supabase account. We never share or sell your data.
+            </div>
+          </details>
+          <details class="group rounded-xl border border-white/10 bg-[#12121a]">
+            <summary class="flex cursor-pointer items-center justify-between px-5 py-4 text-left font-medium text-white">
+              Can I cancel anytime?
+              <span class="text-gray-500 transition group-open:rotate-180">▼</span>
+            </summary>
+            <div class="border-t border-white/10 px-5 pb-4 pt-3 text-sm leading-relaxed text-gray-400">
+              Yes. Cancel in one click from Settings. No questions asked, no cancellation fees.
+            </div>
+          </details>
+          <details class="group rounded-xl border border-white/10 bg-[#12121a]">
+            <summary class="flex cursor-pointer items-center justify-between px-5 py-4 text-left font-medium text-white">
+              Does ARIA give financial advice?
+              <span class="text-gray-500 transition group-open:rotate-180">▼</span>
+            </summary>
+            <div class="border-t border-white/10 px-5 pb-4 pt-3 text-sm leading-relaxed text-gray-400">
+              ARIA gives risk intelligence, not financial advice. All trading decisions are yours.
+            </div>
+          </details>
+          <details class="group rounded-xl border border-white/10 bg-[#12121a]">
+            <summary class="flex cursor-pointer items-center justify-between px-5 py-4 text-left font-medium text-white">
+              What pairs does ARIA cover?
+              <span class="text-gray-500 transition group-open:rotate-180">▼</span>
+            </summary>
+            <div class="border-t border-white/10 px-5 pb-4 pt-3 text-sm leading-relaxed text-gray-400">
+              EUR/USD and AUD/USD with live prices. AI analysis covers all major forex pairs.
+            </div>
+          </details>
+          <details class="group rounded-xl border border-white/10 bg-[#12121a]">
+            <summary class="flex cursor-pointer items-center justify-between px-5 py-4 text-left font-medium text-white">
+              Do I need a TradingView subscription?
+              <span class="text-gray-500 transition group-open:rotate-180">▼</span>
+            </summary>
+            <div class="border-t border-white/10 px-5 pb-4 pt-3 text-sm leading-relaxed text-gray-400">
+              No. ARIA works completely standalone. TradingView integration is optional.
+            </div>
+          </details>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══ SECTION 9 — FINAL CTA ═══ -->
+    <section class="px-4 py-16 sm:px-6 sm:py-20">
+      <div class="mx-auto max-w-4xl rounded-3xl bg-gradient-to-br from-[#1A56DB] to-[#0d3d8a] px-6 py-14 text-center shadow-2xl sm:px-10">
+        <h2 class="text-2xl font-extrabold leading-tight text-white sm:text-3xl lg:text-4xl">
+          Stop trading blind. Start trading with AI risk intelligence.
+        </h2>
+        <p class="mt-4 text-white/90">Join 247+ prop traders already using ARIA</p>
+        <a href="https://shouryajs08-code.github.io/aria-app" class="mt-8 inline-flex w-full max-w-md items-center justify-center rounded-xl bg-white px-8 py-4 text-base font-bold text-[#1A56DB] shadow-lg transition hover:bg-gray-100 sm:w-auto">
+          Start Free — No credit card needed
+        </a>
+        <p class="mt-4 text-sm text-white/80">Takes 30 seconds · Sign in with Google</p>
+      </div>
+    </section>
+  </main>
+
+  <!-- ═══ SECTION 10 — FOOTER ═══ -->
+  <footer class="border-t border-white/10 px-4 py-12 sm:px-6">
+    <div class="mx-auto max-w-6xl">
+      <div class="flex flex-col gap-8 md:flex-row md:items-start md:justify-between">
+        <div>
+          <div class="flex items-center gap-2.5">
+            <div class="flex h-9 w-9 items-center justify-center rounded bg-[#1A56DB] text-sm font-extrabold text-[#0A0A0F]">AR</div>
+            <span class="text-lg font-bold text-white">ARIA</span>
+          </div>
+          <p class="mt-3 max-w-xs text-sm text-gray-500">AI Risk Intelligence for Prop Traders</p>
+        </div>
+        <div class="flex flex-wrap gap-x-8 gap-y-2 text-sm text-gray-400">
+          <a href="#features" class="hover:text-white">Features</a>
+          <a href="#pricing" class="hover:text-white">Pricing</a>
+          <a href="https://shouryajs08-code.github.io/aria-app" class="hover:text-white">Sign In</a>
+          <a href="#" class="hover:text-white">Privacy</a>
+        </div>
+      </div>
+      <p class="mt-10 border-t border-white/10 pt-8 text-center text-xs text-gray-600">
+        © 2026 ARIA Trading · Not financial advice · Built for prop firm traders
+      </p>
+    </div>
+  </footer>
+
+</body>
+</html>
