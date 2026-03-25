@@ -3688,45 +3688,24 @@ async function fetchLivePrices() {
       }
     }
 
-    let audPayload = resolveAudPayloadFromLatest(data);
-    let audFeedKind = 'LIVE';
-
-    if (!audPriceIsFiniteFromPayload(audPayload)) {
-      audPayload = null;
-      try {
-        const ff = await fetch('https://api.frankfurter.app/latest?from=AUD&to=USD');
-        if (ff.ok) {
-          const ffj = await ff.json();
-          const rate = ffj.rates && ffj.rates.USD;
-          if (typeof rate === 'number' && Number.isFinite(rate)) {
-            audPayload = { price: rate, bias: null, rsi: null };
-            audFeedKind = 'DELAYED';
-          }
-        }
-      } catch (_ffErr) {
-        /* no fallback */
-      }
-    }
-
-    if (audPayload && audPriceIsFiniteFromPayload(audPayload)) {
-      const rawP = audPayload.price;
+    if (data.AUDUSD) {
+      const rawAp = data.AUDUSD.price;
       const price =
-        typeof rawP === 'number' ? rawP : parseFloat(String(rawP).replace(/,/g, ''));
+        typeof rawAp === 'number' ? rawAp : parseFloat(String(rawAp).replace(/,/g, ''));
       if (Number.isFinite(price)) {
         const last = lastPrices.AUDUSD;
-        const pips = last != null ? ((price - last) * 10000).toFixed(1) : '0.0';
-        const dir = last != null ? (price > last ? '▲' : price < last ? '▼' : '—') : '—';
+        const pips = last ? ((price - last) * 10000).toFixed(1) : '0.0';
+        const dir = last ? (price > last ? '▲' : price < last ? '▼' : '—') : '—';
         const dirColor = dir === '▲' ? '#00C896' : dir === '▼' ? '#FF4757' : '#888';
 
         const ist = new Date(Date.now() + 19800000);
-        const t = `${String(ist.getUTCHours()).padStart(2, '0')}:${String(ist.getUTCMinutes()).padStart(2, '0')}:${String(ist.getUTCSeconds()).padStart(2, '0')}`;
+        const t = `${String(ist.getUTCHours()).padStart(2,'0')}:${String(ist.getUTCMinutes()).padStart(2,'0')}:${String(ist.getUTCSeconds()).padStart(2,'0')}`;
 
-        updateAUDDisplay(price.toFixed(5), pips, dir, dirColor, t, audPayload.bias, audFeedKind);
+        updateAUDDisplay(price.toFixed(5), pips, dir, dirColor, t, data.AUDUSD.bias);
         lastPrices.AUDUSD = price;
         window.__liveAUDUSD = price.toFixed(5);
-        window.__audBias = audPayload.bias;
-        window.__audRSI = audPayload.rsi;
-        window.__audFeedKind = audFeedKind;
+        window.__audBias = data.AUDUSD.bias;
+        window.__audRSI = data.AUDUSD.rsi;
       }
     }
 
