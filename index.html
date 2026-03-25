@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>ARIA · Live SMC Terminal</title>
+<script src="https://checkout.razorpay.com/v1/checkout.js"></script>
 <style>
 /* ═══════════════════════════════════════════════
    DESIGN TOKENS
@@ -1020,44 +1021,109 @@ select.j-input option { background: var(--card); }
   display: none; align-items: center; justify-content: center;
   padding: 20px;
 }
-.aria-wizard-overlay.open, .aria-upgrade-overlay.open, .aria-manual-pay-overlay.open { display: flex; }
-.aria-manual-pay-overlay {
+.aria-wizard-overlay.open, .aria-upgrade-overlay.open, .aria-pro-billing-overlay.open { display: flex; }
+.aria-pro-billing-overlay {
   position: fixed; inset: 0; z-index: 10002;
   background: rgba(0,0,0,0.88);
   display: none; align-items: center; justify-content: center;
   padding: 20px;
 }
-.manual-pay-close {
+.pro-billing-close {
   position: absolute; top: 12px; right: 14px;
   width: 32px; height: 32px; border: none; border-radius: 8px;
   background: rgba(255,255,255,0.08); color: var(--muted);
   font-size: 20px; line-height: 1; cursor: pointer;
+  z-index: 2;
 }
-.manual-pay-close:hover { color: var(--cream); background: rgba(255,255,255,0.12); }
-.manual-pay-card { position: relative; width: min(420px, 100%); }
-.manual-pay-upi {
-  font-family: var(--sf-mono); font-size: 15px; font-weight: 700;
-  color: var(--cream); background: var(--card2);
-  border: 1px solid var(--border); border-radius: var(--radius-sm);
-  padding: 12px 14px; margin: 12px 0; text-align: center;
-  letter-spacing: 0.02em;
+.pro-billing-close:hover { color: var(--cream); background: rgba(255,255,255,0.12); }
+.aria-pro-billing-card {
+  position: relative;
+  width: min(440px, 100%);
+  background: #0F1117;
+  border: 1px solid #1E3A5F;
+  border-radius: 12px;
+  padding: 28px 22px 24px;
+  box-shadow: 0 0 40px rgba(26,86,219,0.15);
 }
-.manual-pay-amount {
-  font-family: var(--sf-display); font-size: 22px; font-weight: 800;
-  color: var(--success); text-align: center; margin: 8px 0 4px;
+.upgrade-modal-content { text-align: center; }
+.upgrade-modal-content h2 {
+  font-family: var(--sf-display);
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--cream);
+  margin-bottom: 8px;
 }
-.manual-pay-file-wrap {
-  margin: 16px 0 12px;
-  padding: 14px; border: 1px dashed var(--border2); border-radius: var(--radius-sm);
-  background: rgba(26,86,219,0.06);
+.upgrade-subtitle {
+  font-size: 14px;
+  color: var(--muted);
+  margin-bottom: 20px;
 }
-.manual-pay-file-wrap input[type="file"] {
-  width: 100%; font-size: 12px; color: var(--muted);
+.upgrade-price {
+  margin-bottom: 20px;
 }
-.manual-pay-success {
-  text-align: center; padding: 20px 8px;
-  font-size: 15px; font-weight: 600; color: var(--success); line-height: 1.5;
+.upgrade-price .price-amount {
+  font-family: var(--sf-display);
+  font-size: 32px;
+  font-weight: 800;
+  color: #1A56DB;
 }
+.upgrade-price .price-period {
+  font-size: 15px;
+  color: var(--muted);
+  margin-left: 4px;
+}
+.upgrade-benefits {
+  text-align: left;
+  margin: 0 0 22px;
+  padding: 0 4px;
+}
+.upgrade-benefits .benefit {
+  position: relative;
+  padding-left: 22px;
+  font-size: 13px;
+  color: var(--cream);
+  line-height: 1.65;
+  margin-bottom: 8px;
+}
+.upgrade-benefits .benefit::before {
+  content: '✓';
+  position: absolute;
+  left: 0;
+  color: #00C896;
+  font-weight: 700;
+}
+.upgrade-btn-primary {
+  width: 100%;
+  padding: 14px 18px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: #1A56DB;
+  color: #fff;
+  font-family: var(--sf-display);
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  margin-bottom: 12px;
+}
+.upgrade-btn-primary:hover { filter: brightness(1.08); }
+.upgrade-btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+.upgrade-guarantee {
+  font-size: 11px;
+  color: var(--muted);
+  line-height: 1.5;
+  margin-bottom: 14px;
+}
+.upgrade-btn-secondary {
+  width: 100%;
+  padding: 12px;
+  border: 1px solid var(--border2);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--muted);
+  font-size: 14px;
+  cursor: pointer;
+}
+.upgrade-btn-secondary:hover { color: var(--cream); border-color: var(--border); }
 .aria-wizard-card, .aria-upgrade-card {
   width: min(440px, 100%);
   background: #0F1117;
@@ -1438,56 +1504,13 @@ body.aria-auth-locked .app {
     getCurrentUser,
     getUserPlan,
     supabase,
-    submitManualPaymentProofFlow,
     approveUser,
   } from './supabase-config.js';
 
   window.__ARIA_AUTH__ = { user: null, plan: 'free', access_token: null };
+  window.__ARIA_SUPABASE__ = supabase;
+  window.__ARIA_USER__ = null;
   window.approveUser = approveUser;
-
-  window.submitManualPaymentProof = async function () {
-    const fileInp = document.getElementById('manualPayFile');
-    const form = document.getElementById('manualPayForm');
-    const successEl = document.getElementById('manualPaySuccess');
-    if (!fileInp || !fileInp.files || !fileInp.files.length) {
-      alert('Please choose a screenshot or PDF of your payment.');
-      return;
-    }
-    const submitBtn = form?.querySelector('.modal-upgrade-btn');
-    if (submitBtn) {
-      submitBtn.disabled = true;
-      submitBtn.textContent = 'Submitting…';
-    }
-    try {
-      const emailEl = document.getElementById('manualPayEmail');
-      const emailVal = emailEl && emailEl.value ? emailEl.value.trim() : '';
-      const result = await submitManualPaymentProofFlow(fileInp.files[0], {
-        email: emailVal || undefined,
-      });
-      if (!result.ok) {
-        alert(result.message || 'Could not submit payment proof.');
-        return;
-      }
-      try {
-        localStorage.setItem(
-          'aria_manual_proof_submitted',
-          JSON.stringify({ at: Date.now(), paymentId: result.paymentId })
-        );
-      } catch (_e) {}
-      if (form) form.classList.add('hidden');
-      if (successEl) {
-        successEl.textContent = 'Payment submitted. Awaiting approval.';
-        successEl.classList.remove('hidden');
-      }
-    } catch (e) {
-      alert(e?.message || 'Something went wrong. Please try again.');
-    } finally {
-      if (submitBtn) {
-        submitBtn.disabled = false;
-        submitBtn.textContent = 'Submit Payment Proof';
-      }
-    }
-  };
 
   window.__ARIA_REFRESHAccessToken = async () => {
     const { data: { session }, error } = await supabase.auth.getSession();
@@ -1540,7 +1563,10 @@ body.aria-auth-locked .app {
       }
 
       const user = data?.user ?? null;
-      if (!user) return;
+      if (!user) {
+        window.__ARIA_USER__ = null;
+        return;
+      }
 
       const plan = await getUserPlan(user.id);
       const { data: { session } } = await supabase.auth.getSession();
@@ -1549,6 +1575,7 @@ body.aria-auth-locked .app {
         plan: plan || 'free',
         access_token: session?.access_token ?? null,
       };
+      window.__ARIA_USER__ = user;
 
       // If DOM already exists, apply immediately.
       applyUserProfileUI(user, plan);
@@ -1567,6 +1594,7 @@ body.aria-auth-locked .app {
       console.warn('ARIA logout error:', e);
     } finally {
       window.__ARIA_AUTH__ = { user: null, plan: 'free', access_token: null };
+      window.__ARIA_USER__ = null;
       setAuthLocked(true);
       window.location.reload();
     }
@@ -2142,31 +2170,28 @@ body.aria-auth-locked .app {
   </div>
 </div>
 
-<!-- Manual UPI payment — Pro upgrade -->
-<div class="aria-manual-pay-overlay" id="ariaManualPayOverlay" role="dialog" aria-modal="true" aria-labelledby="manualPayTitle" onclick="if(event.target===this) closeManualUpgradeModal()">
-  <div class="aria-upgrade-card manual-pay-card" onclick="event.stopPropagation()">
-    <button type="button" class="manual-pay-close" onclick="closeManualUpgradeModal()" aria-label="Close">×</button>
-    <div class="aria-wizard-title" id="manualPayTitle">Upgrade to Pro</div>
-    <div class="aria-wizard-body" style="text-align:center;margin-bottom:8px">
-      Pay via UPI and upload your payment screenshot. We’ll verify and upgrade your account.
-    </div>
-    <div class="manual-pay-amount">₹1999</div>
-    <div class="modal-label" style="text-align:center;margin-top:4px">UPI ID</div>
-    <div class="manual-pay-upi" id="manualPayUpi">7276367769@ibl</div>
-    <p class="modal-hint" style="text-align:center;margin:12px 0;line-height:1.5">
-      Send payment and upload screenshot
-    </p>
-    <div id="manualPayForm">
-      <div class="modal-label" style="margin-bottom:6px">Email (optional)</div>
-      <input type="email" class="modal-input" id="manualPayEmail" placeholder="you@example.com" autocomplete="email" style="width:100%;box-sizing:border-box;margin-bottom:12px">
-      <div class="manual-pay-file-wrap">
-        <div class="modal-label" style="margin-bottom:8px">Payment screenshot</div>
-        <input type="file" id="manualPayFile" accept="image/*,.pdf" aria-label="Upload payment proof">
+<!-- Pro billing — Razorpay (Settings → Upgrade to Pro) -->
+<div class="aria-pro-billing-overlay" id="ariaProBillingOverlay" role="dialog" aria-modal="true" aria-labelledby="proBillingTitle" onclick="if(event.target===this) closeProBillingModal()">
+  <div class="aria-pro-billing-card" onclick="event.stopPropagation()">
+    <button type="button" class="pro-billing-close" onclick="closeProBillingModal()" aria-label="Close">×</button>
+    <div class="upgrade-modal-content">
+      <h2 id="proBillingTitle">Upgrade to Pro</h2>
+      <p class="upgrade-subtitle">Join 247+ prop traders using ARIA</p>
+      <div class="upgrade-price">
+        <span class="price-amount">₹1,999</span>
+        <span class="price-period">/month</span>
       </div>
-      <button type="button" class="modal-upgrade-btn" style="width:100%;margin-bottom:0" onclick="submitManualPaymentProof()">Submit Payment Proof</button>
-      <button type="button" class="modal-sub-btn" style="margin-top:10px;width:100%;margin-bottom:0" onclick="closeManualUpgradeModal()">Cancel</button>
+      <div class="upgrade-benefits">
+        <div class="benefit">Unlimited ARIA AI queries</div>
+        <div class="benefit">Live economic alerts 30 min before events</div>
+        <div class="benefit">Auto pre-session brief every morning</div>
+        <div class="benefit">Cloud sync across all devices</div>
+        <div class="benefit">Priority support</div>
+      </div>
+      <button type="button" id="rzp-button" class="upgrade-btn-primary">Start 7-Day Free Trial</button>
+      <p class="upgrade-guarantee">Cancel anytime · No questions asked · UPI &amp; Cards accepted</p>
+      <button type="button" class="upgrade-btn-secondary" onclick="closeProBillingModal()">Maybe later</button>
     </div>
-    <div id="manualPaySuccess" class="manual-pay-success hidden" role="status"></div>
   </div>
 </div>
 
@@ -2178,9 +2203,6 @@ const FINNHUB_API_KEY = 'd715svpr01ql6rg1g4egd715svpr01ql6rg1g4f0';
 
 /** Cloudflare Worker — always absolute URL (relative /api/aria breaks on static hosts). */
 const ARIA_WORKER_API_URL = 'https://aria-proxy.aria-trader.workers.dev/api/aria';
-
-/** Razorpay Key ID — Dashboard → API Keys → Key ID (starts with rzp_test_ or rzp_live_) */
-const RAZORPAY_KEY_ID = 'rzp_test_REPLACE_WITH_YOUR_KEY_ID';
 
 const PROP_FIRMS = {
   'FTMO': { maxDD: 10, dailyLoss: 5, target: 10 },
@@ -2409,8 +2431,8 @@ function closeUpgradeModal() {
   if (o) o.classList.remove('open');
 }
 function upgradeModalSubscribe() {
-  if (typeof startRazorpayProUpgrade === 'function') {
-    startRazorpayProUpgrade({ fromUpgradeModal: true });
+  if (typeof launchRazorpayCheckout === 'function') {
+    launchRazorpayCheckout({ fromUpgradeModal: true });
   }
 }
 function closeUpgradeModalAndContinue() {
@@ -2427,40 +2449,159 @@ function closeUpgradeModalAndContinue() {
 }
 window.showUpgradeModal = showUpgradeModal;
 
-function openManualUpgradeModal() {
+/** Razorpay Key ID — replace with your live key after approval */
+const RAZORPAY_CHECKOUT_KEY = 'rzp_live_YOUR_KEY_HERE';
+
+function openProBillingModal() {
   if (typeof closeModal === 'function') closeModal();
-  const overlay = document.getElementById('ariaManualPayOverlay');
-  const form = document.getElementById('manualPayForm');
-  const successEl = document.getElementById('manualPaySuccess');
-  const fileInp = document.getElementById('manualPayFile');
-  const emailInp = document.getElementById('manualPayEmail');
-  if (form) form.classList.remove('hidden');
-  if (successEl) {
-    successEl.classList.add('hidden');
-    successEl.textContent = '';
-  }
-  if (fileInp) fileInp.value = '';
-  if (emailInp) emailInp.value = '';
+  const overlay = document.getElementById('ariaProBillingOverlay');
   if (overlay) overlay.classList.add('open');
 }
-function closeManualUpgradeModal() {
-  const overlay = document.getElementById('ariaManualPayOverlay');
+function closeProBillingModal() {
+  const overlay = document.getElementById('ariaProBillingOverlay');
   if (overlay) overlay.classList.remove('open');
 }
-window.openManualUpgradeModal = openManualUpgradeModal;
-window.closeManualUpgradeModal = closeManualUpgradeModal;
+window.openManualUpgradeModal = openProBillingModal;
+window.closeProBillingModal = closeProBillingModal;
 
-function loadRazorpayCheckoutScript() {
-  if (window.Razorpay) return Promise.resolve();
-  return new Promise((resolve, reject) => {
-    const s = document.createElement('script');
-    s.src = 'https://checkout.razorpay.com/v1/checkout.js';
-    s.async = true;
-    s.onload = () => resolve();
-    s.onerror = () => reject(new Error('Failed to load Razorpay SDK'));
-    document.head.appendChild(s);
-  });
+function showSuccessToast(message) {
+  const toast = document.createElement('div');
+  toast.style.cssText =
+    'position: fixed; top: 20px; right: 20px; ' +
+    'background: #00C896; color: white;' +
+    'padding: 16px 24px; border-radius: 8px;' +
+    'font-size: 14px; z-index: 99999;' +
+    'box-shadow: 0 4px 20px rgba(0,200,150,0.3);';
+  toast.textContent = message;
+  document.body.appendChild(toast);
+  setTimeout(function () {
+    toast.remove();
+  }, 5000);
 }
+
+async function handleRazorpayPaymentSuccess(response, opts) {
+  opts = opts || {};
+  const paymentId = response.razorpay_payment_id;
+  const user = window.__ARIA_USER__ || (window.__ARIA_AUTH__ && window.__ARIA_AUTH__.user);
+  const supa = window.__ARIA_SUPABASE__;
+
+  if (user && user.id && supa) {
+    const { error } = await supa
+      .from('users')
+      .update({
+        plan: 'pro',
+        payment_id: paymentId,
+        upgraded_at: new Date().toISOString(),
+      })
+      .eq('id', user.id);
+    if (error) console.warn('[ARIA] Supabase plan update failed:', error.message || error);
+  }
+
+  localStorage.setItem(
+    'aria_razorpay_last_payment',
+    JSON.stringify({ ...response, capturedAt: Date.now(), amount_paise: 199900, currency: 'INR' })
+  );
+  localStorage.setItem('aria_client_plan', 'pro');
+  sessionStorage.setItem('aria_upgrade_ack', '1');
+
+  applyLocalProPlanUI();
+
+  ['ariaUserPlanBadge', 'ariaSettingsUserPlanBadge'].forEach(function (id) {
+    const el = document.getElementById(id);
+    if (el) {
+      el.style.background = '#1A56DB';
+      el.style.color = '#ffffff';
+      el.style.borderColor = 'rgba(255,255,255,0.25)';
+    }
+  });
+
+  const payHint = document.getElementById('ariaPaymentSuccess');
+  if (payHint) {
+    payHint.style.display = 'block';
+    payHint.textContent = 'Upgraded to Pro';
+  }
+
+  closeProBillingModal();
+
+  showSuccessToast('Welcome to ARIA Pro! Unlimited queries unlocked.');
+
+  if (opts.fromUpgradeModal) {
+    closeUpgradeModal();
+    addAriaMsg(
+      '<span style="color:var(--success)"><b>Upgraded to Pro</b> — Payment received. Thank you!</span><br>' +
+        '<span style="color:var(--muted);font-size:12px">Payment ID: ' +
+        esc(String(response.razorpay_payment_id || '—')) +
+        '</span>'
+    );
+    const t = pendingSendText;
+    pendingSendText = null;
+    if (t) {
+      document.getElementById('chatTa').value = '';
+      document.getElementById('chatTa').style.height = 'auto';
+      addUserMsg(t);
+      doSendAria(t);
+    }
+  }
+}
+
+function launchRazorpayCheckout(opts) {
+  opts = opts || {};
+  if (!RAZORPAY_CHECKOUT_KEY || RAZORPAY_CHECKOUT_KEY.indexOf('YOUR_KEY_HERE') !== -1) {
+    alert('Replace rzp_live_YOUR_KEY_HERE in index.html with your Razorpay Key ID when approved.');
+    return;
+  }
+  if (typeof Razorpay === 'undefined') {
+    alert('Razorpay script failed to load. Refresh the page and try again.');
+    return;
+  }
+
+  const user = window.__ARIA_USER__ || (window.__ARIA_AUTH__ && window.__ARIA_AUTH__.user);
+  if (!user || !user.id) {
+    alert('Please sign in with Google to upgrade.');
+    return;
+  }
+
+  const options = {
+    key: RAZORPAY_CHECKOUT_KEY,
+    amount: 199900,
+    currency: 'INR',
+    name: 'ARIA Trading',
+    description: 'Pro Plan - Unlimited AI Trading Analysis',
+    image: 'https://shouryajs08-code.github.io/aria-app/logo.png',
+    handler: function (handlerResponse) {
+      handleRazorpayPaymentSuccess(handlerResponse, opts);
+    },
+    prefill: {
+      email: user.email || '',
+      name: (user.user_metadata && user.user_metadata.full_name) || 'Trader',
+    },
+    theme: { color: '#1A56DB' },
+    modal: {
+      ondismiss: function () {
+        console.log('Payment dismissed');
+      },
+    },
+  };
+
+  try {
+    const rzp = new Razorpay(options);
+    rzp.open();
+  } catch (e) {
+    console.error('Razorpay open failed:', e);
+    alert('Payment could not start: ' + (e && e.message ? e.message : String(e)));
+  }
+}
+
+function openRazorpay() {
+  launchRazorpayCheckout({});
+}
+
+window.startRazorpayProUpgrade = launchRazorpayCheckout;
+
+(function wireRazorpayBillingButton() {
+  const btn = document.getElementById('rzp-button');
+  if (btn) btn.onclick = openRazorpay;
+})();
 
 function applyLocalProPlanUI() {
   const headerPlan = document.getElementById('ariaUserPlanBadge');
@@ -2481,88 +2622,6 @@ function restoreClientProPlanIfPaid() {
     applyLocalProPlanUI();
   }
 }
-
-function onRazorpayProSuccess(response, opts) {
-  console.log('Razorpay payment success:', response);
-  localStorage.setItem(
-    'aria_razorpay_last_payment',
-    JSON.stringify({ ...response, capturedAt: Date.now(), amount_paise: 199900, currency: 'INR' })
-  );
-  localStorage.setItem('aria_client_plan', 'pro');
-  sessionStorage.setItem('aria_upgrade_ack', '1');
-
-  applyLocalProPlanUI();
-
-  const payHint = document.getElementById('ariaPaymentSuccess');
-  if (payHint) {
-    payHint.style.display = 'block';
-    payHint.textContent = 'Upgraded to Pro';
-  }
-
-  closeUpgradeModal();
-
-  addAriaMsg(
-    '<span style="color:var(--success)"><b>Upgraded to Pro</b> — Payment received. Thank you!</span><br>' +
-    '<span style="color:var(--muted);font-size:12px">Payment ID: ' +
-    esc(String(response.razorpay_payment_id || '—')) +
-    '</span>'
-  );
-
-  // TODO: POST payment + order_id to your backend for signature verification (production).
-
-  const t = pendingSendText;
-  pendingSendText = null;
-  if (t) {
-    document.getElementById('chatTa').value = '';
-    document.getElementById('chatTa').style.height = 'auto';
-    addUserMsg(t);
-    doSendAria(t);
-  }
-}
-
-async function startRazorpayProUpgrade(opts) {
-  opts = opts || {};
-  if (!RAZORPAY_KEY_ID || RAZORPAY_KEY_ID.indexOf('REPLACE') !== -1) {
-    alert('Add your Razorpay Key ID: set RAZORPAY_KEY_ID in index.html (Razorpay Dashboard → API Keys).');
-    return;
-  }
-  try {
-    await loadRazorpayCheckoutScript();
-  } catch (e) {
-    console.error(e);
-    alert('Could not load Razorpay. Check your connection and try again.');
-    return;
-  }
-
-  const email = (window.__ARIA_AUTH__ && window.__ARIA_AUTH__.user && window.__ARIA_AUTH__.user.email) || '';
-
-  const options = {
-    key: RAZORPAY_KEY_ID,
-    amount: 199900,
-    currency: 'INR',
-    name: 'ARIA',
-    description: 'Pro Plan',
-    handler: function (response) {
-      onRazorpayProSuccess(response, opts);
-    },
-    prefill: { email: email },
-    theme: { color: '#1A56DB' },
-    modal: {
-      ondismiss: function () {
-        console.log('Razorpay checkout dismissed');
-      },
-    },
-  };
-
-  try {
-    const rzp = new Razorpay(options);
-    rzp.open();
-  } catch (e) {
-    console.error('Razorpay open failed:', e);
-    alert('Payment could not start: ' + (e && e.message ? e.message : String(e)));
-  }
-}
-window.startRazorpayProUpgrade = startRazorpayProUpgrade;
 
 let socialProofIdx = 0;
 function initSocialProofTicker() {

@@ -14,6 +14,8 @@ create table if not exists public.users (
 -- App admins can approve manual payments from the client (see approveUser in supabase-config.js).
 -- Set once in SQL Editor: update public.users set is_admin = true where email = 'you@example.com';
 alter table public.users add column if not exists is_admin boolean not null default false;
+alter table public.users add column if not exists payment_id text;
+alter table public.users add column if not exists upgraded_at timestamptz;
 
 -- Auto-provision public.users on signup (SECURITY DEFINER — bypasses RLS).
 -- The payment flow only INSERTs into payments; it must not INSERT into users from the client.
