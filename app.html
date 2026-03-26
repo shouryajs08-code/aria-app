@@ -1509,6 +1509,14 @@ body.aria-auth-locked .app {
 </head>
 <body class="aria-auth-locked">
 
+<!-- Env bridge (works with Vite; safe fallback for static hosting) -->
+<script type="module">
+  window.__ARIA_ENV__ = window.__ARIA_ENV__ || {};
+  try {
+    window.__ARIA_ENV__.VITE_RAZORPAY_KEY = import.meta.env?.VITE_RAZORPAY_KEY;
+  } catch (_e) {}
+</script>
+
 <!-- ═══ SUPABASE AUTH (load before app boot) ═════════════ -->
 <script type="module">
   import {
@@ -2465,7 +2473,7 @@ function closeUpgradeModalAndContinue() {
 }
 window.showUpgradeModal = showUpgradeModal;
 
-const RAZORPAY_KEY = 'rzp_test_SVXTCd2Ubnvkvu';
+const RAZORPAY_KEY = window.__ARIA_ENV__?.VITE_RAZORPAY_KEY || 'rzp_live_SVp1QqsdfUslF0';
 
 function openProBillingModal() {
   if (typeof closeModal === 'function') closeModal();
@@ -2557,6 +2565,8 @@ function openRazorpay(amountPaise, opts) {
           toast.remove();
         }, 5000);
 
+        window.location.href = '/app.html?payment=success';
+
         if (opts.fromUpgradeModal) {
           addAriaMsg(
             '<span style="color:var(--success)"><b>Upgraded to Pro</b> — Payment received. Thank you!</span><br>' +
@@ -2573,8 +2583,7 @@ function openRazorpay(amountPaise, opts) {
             doSendAria(t);
           }
         }
-      } catch (err) {
-        console.error('Plan update failed:', err);
+      } catch (_err) {
         alert('Payment received! Contact support to activate Pro.');
       }
     },
@@ -2593,6 +2602,9 @@ function openRazorpay(amountPaise, opts) {
   };
 
   var rzp = new Razorpay(options);
+  rzp.on('payment.failed', function () {
+    alert('Payment failed, try again');
+  });
   rzp.open();
 }
 
