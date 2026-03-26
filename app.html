@@ -3828,96 +3828,57 @@ function saveProp() {
 
 const PRICE_POLL_MS = 3000;
 const PIP_SIZE = 0.0001;
-
 let lastPrices = { EURUSD: null, AUDUSD: null };
 
-function parsePrice(raw) {
-  return typeof raw === 'number' ? raw : parseFloat(String(raw || '').replace(/,/g, ''));
-}
-
-function getPayloadForSymbol(data, symbol) {
-  if (!data || typeof data !== 'object') return null;
-  return data[symbol] || data[symbol.toUpperCase()] || data[symbol.toLowerCase()] || null;
-}
-
-async function fetchPairPayload(symbolFormats) {
-  const formats = Array.isArray(symbolFormats) ? symbolFormats : [String(symbolFormats || '')];
-
-  // First try pair-specific endpoint in requested format order.
-  for (const symbol of formats) {
-    try {
-      const r = await fetch(`${ARIA_SERVER_URL}/latest/${encodeURIComponent(symbol)}`);
-      if (!r.ok) continue;
-      const data = await r.json();
-      if (data && data.price != null) return data;
-    } catch (_err) {}
+async function fetchPrice(symbol) {
+  try {
+    const res = await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${symbol}`);
+    const data = await res.json();
+    const price = data?.chart?.result?.[0]?.meta?.regularMarketPrice;
+    return Number.isFinite(price) ? price : null;
+  } catch (e) {
+    console.error("Fetch error:", e);
+    return null;
   }
-
-  // Fallback to /latest and resolve by keys.
-  const res = await fetch(`${ARIA_SERVER_URL}/latest`);
-  if (!res.ok) throw new Error('Server offline');
-  const data = await res.json();
-  for (const symbol of formats) {
-    const payload = getPayloadForSymbol(data, symbol);
-    if (payload && payload.price != null) return payload;
-  }
-  return null;
-}
-
-function applyPairPrice(pair, price, payload) {
-  const last = lastPrices[pair];
-  const pips = last ? ((price - last) * 10000).toFixed(1) : '0.0';
-  const dir = last ? (price > last ? '▲' : price < last ? '▼' : '—') : '—';
-  const dirColor = dir === '▲' ? '#00C896' : dir === '▼' ? '#FF4757' : '#888';
-  const ist = new Date(Date.now() + 19800000);
-  const t = `${String(ist.getUTCHours()).padStart(2,'0')}:${String(ist.getUTCMinutes()).padStart(2,'0')}:${String(ist.getUTCSeconds()).padStart(2,'0')}`;
-
-  if (pair === 'EURUSD') {
-    updateEURDisplay(price.toFixed(5), pips, dir, dirColor, t, payload?.bias);
-    lastPrices.EURUSD = price;
-    window.__liveEURUSD = price.toFixed(5);
-    window.__eurBias = payload?.bias || null;
-    window.__eurRSI = payload?.rsi || null;
-    return;
-  }
-
-  updateAUDDisplay(price.toFixed(5), pips, dir, dirColor, t, payload?.bias);
-  const audPriceEl = document.getElementById('audusd-price');
-  if (audPriceEl) audPriceEl.innerText = price.toFixed(5);
-  lastPrices.AUDUSD = price;
-  window.__liveAUDUSD = price.toFixed(5);
-  window.__audBias = payload?.bias || null;
-  window.__audRSI = payload?.rsi || null;
 }
 
 async function fetchEURUSD() {
   try {
-    const payload = await fetchPairPayload(['EURUSD', 'EUR/USD', 'EURUSD=X']);
-    const price = parsePrice(payload?.price);
-    if (!Number.isFinite(price)) throw new Error('Invalid EURUSD price');
-    applyPairPrice('EURUSD', price, payload);
+    const price = await fetchPrice("EURUSD=X");
+    if (!price) return;
+    const last = lastPrices.EURUSD;
+    const pips = last ? ((price - last) * 10000).toFixed(1) : '0.0';
+    const dir = last ? (price > last ? '▲' : price < last ? '▼' : '—') : '—';
+    const dirColor = dir === '▲' ? '#00C896' : dir === '▼' ? '#FF4757' : '#888';
+    const ist = new Date(Date.now() + 19800000);
+    const t = `${String(ist.getUTCHours()).padStart(2,'0')}:${String(ist.getUTCMinutes()).padStart(2,'0')}:${String(ist.getUTCSeconds()).padStart(2,'0')}`;
+    updateEURDisplay(price.toFixed(5), pips, dir, dirColor, t, null);
+    lastPrices.EURUSD = price;
+    window.__liveEURUSD = price.toFixed(5);
+    const el = document.getElementById("eurusd-price");
+    if (el) el.innerText = price.toFixed(5);
   } catch (e) {
-    console.error('EURUSD fetch failed:', e);
+    console.error("EURUSD error:", e);
   }
-}
-
-function applyAudFallback() {
-  const fallback = lastPrices.AUDUSD || 0.6700;
-  const payload = { bias: window.__audBias || 'fallback' };
-  applyPairPrice('AUDUSD', fallback, payload);
 }
 
 async function fetchAUDUSD() {
   try {
-    console.log("Fetching AUDUSD...");
-    const payload = await fetchPairPayload(['AUDUSD', 'AUD/USD', 'AUDUSD=X']);
-    console.log("AUDUSD response:", payload);
-    const price = parsePrice(payload?.price);
-    if (!Number.isFinite(price)) throw new Error('Invalid AUDUSD price');
-    applyPairPrice('AUDUSD', price, payload);
+    const price = await fetchPrice("AUDUSD=X");
+    if (!price) return;
+    const last = lastPrices.AUDUSD;
+    const pips = last ? ((price - last) * 10000).toFixed(1) : '0.0';
+    const dir = last ? (price > last ? '▲' : price < last ? '▼' : '—') : '—';
+    const dirColor = dir === '▲' ? '#00C896' : dir === '▼' ? '#FF4757' : '#888';
+    const ist = new Date(Date.now() + 19800000);
+    const t = `${String(ist.getUTCHours()).padStart(2,'0')}:${String(ist.getUTCMinutes()).padStart(2,'0')}:${String(ist.getUTCSeconds()).padStart(2,'0')}`;
+    updateAUDDisplay(price.toFixed(5), pips, dir, dirColor, t, null);
+    lastPrices.AUDUSD = price;
+    window.__liveAUDUSD = price.toFixed(5);
+    const el = document.getElementById("audusd-price");
+    if (el) el.innerText = price.toFixed(5);
   } catch (e) {
-    console.error('AUDUSD fetch failed:', e);
-    applyAudFallback();
+    console.error("AUDUSD error:", e);
   }
 }
 
@@ -4018,11 +3979,20 @@ function updateAUDDisplay(price, pips, dir, dirColor, time, bias, feedKind) {
   });
 }
 
-fetchLivePrices();
-setInterval(() => {
-  fetchEURUSD();
-  fetchAUDUSD();
-}, PRICE_POLL_MS);
+function startPriceFeed() {
+  try {
+    fetchEURUSD();
+    fetchAUDUSD();
+    setInterval(() => {
+      fetchEURUSD();
+      fetchAUDUSD();
+    }, PRICE_POLL_MS);
+  } catch (e) {
+    console.error('Price feed loop error:', e);
+  }
+}
+
+window.addEventListener("load", startPriceFeed);
 
 /* ── BOTTOM NAV SCROLL ─────────────────────────────────── */
 function scrollTo(id, btn) {
