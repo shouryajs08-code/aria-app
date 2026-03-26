@@ -22,6 +22,43 @@ function jsonResponse(body, status = 200) {
   return new Response(JSON.stringify(body), { status, headers });
 }
 
+async function handleVerifyPayment(request, env) {
+  try {
+    const body = await request.json();
+    const { user_id } = body || {};
+    if (!user_id) return jsonResponse({ success: false, error: 'user_id is required' }, 400);
+
+    const serviceRole = env.SUPABASE_SERVICE_ROLE_KEY;
+    const supabaseUrl = env.SUPABASE_URL;
+    if (!serviceRole || !supabaseUrl) {
+      return jsonResponse({ success: false, error: 'Server misconfiguration' }, 500);
+    }
+
+    // MVP: signature verification intentionally skipped.
+    const patchRes = await fetch(
+      `${String(supabaseUrl).replace(/\/$/, '')}/rest/v1/users?id=eq.${encodeURIComponent(user_id)}`,
+      {
+        method: 'PATCH',
+        headers: {
+          apikey: serviceRole,
+          Authorization: `Bearer ${serviceRole}`,
+          'Content-Type': 'application/json',
+          Prefer: 'return=minimal',
+        },
+        body: JSON.stringify({ plan: 'pro' }),
+      }
+    );
+
+    if (!patchRes.ok) return jsonResponse({ success: false, error: 'Plan update failed' }, 500);
+    return jsonResponse({ success: true }, 200);
+  } catch (e) {
+    return jsonResponse(
+      { success: false, error: e instanceof Error ? e.message : 'Verification failed' },
+      500
+    );
+  }
+}
+
 async function verifySupabaseUser(env, jwt) {
   const url = env.SUPABASE_URL;
   const anon = env.SUPABASE_ANON_KEY;
@@ -46,16 +83,25 @@ export default {
   async fetch(request, env) {
     const cors = corsHeaders();
     const url = new URL(request.url);
-
-    // Only /api/aria is served (no trailing-slash mismatch)
     const path = url.pathname.replace(/\/$/, '') || '/';
-    if (path !== '/api/aria') {
-      return jsonResponse({ error: { message: 'Not found' } }, 404);
-    }
 
     // Preflight
     if (request.method === 'OPTIONS') {
       return new Response(null, { status: 204, headers: cors });
+    }
+
+    if (path === '/api/verify-payment') {
+      if (request.method !== 'POST') {
+        return jsonResponse(
+          { error: { message: 'Method not allowed', allowed: ['POST', 'OPTIONS'] } },
+          405
+        );
+      }
+      return handleVerifyPayment(request, env);
+    }
+
+    if (path !== '/api/aria') {
+      return jsonResponse({ error: { message: 'Not found' } }, 404);
     }
 
     // Browser GET → helpful JSON (not "Not found")

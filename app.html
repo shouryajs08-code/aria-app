@@ -1551,6 +1551,25 @@ body.aria-auth-locked .app {
     document.body.classList.toggle('aria-auth-unlocked', !locked);
   };
 
+  async function syncUserRowAfterLogin(user) {
+    if (!user?.id) return;
+    try {
+      await supabase
+        .from('users')
+        .upsert(
+          {
+            id: user.id,
+            email: user.email || null,
+            plan: 'free',
+          },
+          {
+            onConflict: 'id',
+            ignoreDuplicates: true,
+          }
+        );
+    } catch (_e) {}
+  }
+
   const applyUserProfileUI = (user, plan) => {
     const label = String(plan || 'free').toLowerCase() === 'pro' ? 'Pro' : 'Free';
     const email = user?.email || '—';
@@ -1595,6 +1614,8 @@ body.aria-auth-locked .app {
         window.__ARIA_USER__ = null;
         return;
       }
+
+      await syncUserRowAfterLogin(user);
 
       const plan = await getUserPlan(user.id);
       const { data: { session } } = await supabase.auth.getSession();
@@ -2518,7 +2539,7 @@ function closeProBillingModal() {
 window.openManualUpgradeModal = openProBillingModal;
 window.closeProBillingModal = closeProBillingModal;
 
-function openRazorpay(amountPaise, opts) {
+async function startPayment(amountPaise, opts) {
   try {
     opts = opts || {};
     var amount = amountPaise != null ? amountPaise : 199900;
@@ -2526,7 +2547,13 @@ function openRazorpay(amountPaise, opts) {
       alert('Razorpay script failed to load. Refresh the page and try again.');
       return;
     }
-    var user = window.__ARIA_USER__ || (window.__ARIA_AUTH__ && window.__ARIA_AUTH__.user);
+    var supabaseClient = window.__ARIA_SUPABASE__;
+    if (!supabaseClient) {
+      alert('Auth client unavailable. Refresh and try again.');
+      return;
+    }
+    var userResp = await supabaseClient.auth.getUser();
+    var user = userResp && userResp.data ? userResp.data.user : null;
     if (!user || !user.id) {
       alert('Please sign in with Google to upgrade.');
       return;
@@ -2541,87 +2568,68 @@ function openRazorpay(amountPaise, opts) {
       description: 'Pro Plan — Unlimited AI Trading Analysis',
       handler: async function (response) {
         try {
-          const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2');
-          const supabase = createClient(
-            'https://dontnxkzdwkcphhtswrj.supabase.co',
-            'sb_publishable_0uUsa3CC3LLm77Kc4ayR6Q_MBT'
-          );
+          var verifyRes = await fetch('https://aria-proxy.aria-trader.workers.dev/api/verify-payment', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              razorpay_payment_id: response.razorpay_payment_id,
+              razorpay_order_id: response.razorpay_order_id,
+              razorpay_signature: response.razorpay_signature,
+              user_id: user.id,
+            }),
+          });
+          var verifyData = await verifyRes.json().catch(function () { return {}; });
+          if (!verifyRes.ok || !verifyData.success) throw new Error('Verification failed');
 
-          await supabase
-            .from('users')
-            .update({
-              plan: 'pro',
-              payment_id: response.razorpay_payment_id,
-              upgraded_at: new Date().toISOString(),
-            })
-            .eq('id', user.id);
-
-        document.querySelectorAll('.plan-badge, #planBadge').forEach(function (el) {
-          el.textContent = 'Pro';
-          el.style.background = '#1A56DB';
-          el.style.color = 'white';
-        });
-
-        closeProBillingModal();
-        if (opts.fromUpgradeModal) closeUpgradeModal();
-
-        localStorage.setItem(
-          'aria_razorpay_last_payment',
-          JSON.stringify({ razorpay_payment_id: response.razorpay_payment_id, capturedAt: Date.now(), amount_paise: amount, currency: 'INR' })
-        );
-        var planName = amount >= 1799900 ? 'pro_annual' : 'pro_monthly';
-        localStorage.setItem('aria_client_plan', 'pro');
-        localStorage.setItem('userPlan', planName);
-        sessionStorage.setItem('aria_upgrade_ack', '1');
-
-        applyLocalProPlanUI();
-
-        ['ariaUserPlanBadge', 'ariaSettingsUserPlanBadge'].forEach(function (id) {
-          var el = document.getElementById(id);
-          if (el) {
+          document.querySelectorAll('.plan-badge, #planBadge').forEach(function (el) {
+            el.textContent = 'Pro';
             el.style.background = '#1A56DB';
-            el.style.color = '#ffffff';
-            el.style.borderColor = 'rgba(255,255,255,0.25)';
+            el.style.color = 'white';
+          });
+
+          closeProBillingModal();
+          if (opts.fromUpgradeModal) closeUpgradeModal();
+
+          localStorage.setItem(
+            'aria_razorpay_last_payment',
+            JSON.stringify({ razorpay_payment_id: response.razorpay_payment_id, capturedAt: Date.now(), amount_paise: amount, currency: 'INR' })
+          );
+          var planName = amount >= 1799900 ? 'pro_annual' : 'pro_monthly';
+          localStorage.setItem('aria_client_plan', 'pro');
+          localStorage.setItem('userPlan', planName);
+          sessionStorage.setItem('aria_upgrade_ack', '1');
+
+          applyLocalProPlanUI();
+
+          ['ariaUserPlanBadge', 'ariaSettingsUserPlanBadge'].forEach(function (id) {
+            var el = document.getElementById(id);
+            if (el) {
+              el.style.background = '#1A56DB';
+              el.style.color = '#ffffff';
+              el.style.borderColor = 'rgba(255,255,255,0.25)';
+            }
+          });
+
+          var payHint = document.getElementById('ariaPaymentSuccess');
+          if (payHint) {
+            payHint.style.display = 'block';
+            payHint.textContent = 'Upgraded to Pro';
           }
-        });
 
-        var payHint = document.getElementById('ariaPaymentSuccess');
-        if (payHint) {
-          payHint.style.display = 'block';
-          payHint.textContent = 'Upgraded to Pro';
-        }
-
-        var toast = document.createElement('div');
-        toast.style.cssText =
-          'position:fixed;top:20px;right:20px;background:#00C896;color:white;padding:16px 24px;border-radius:8px;font-size:14px;z-index:9999;font-family:Inter,sans-serif';
-        toast.textContent = '🎉 Welcome to ARIA Pro! Unlimited queries unlocked.';
-        document.body.appendChild(toast);
-        setTimeout(function () {
-          toast.remove();
-        }, 5000);
+          var toast = document.createElement('div');
+          toast.style.cssText =
+            'position:fixed;top:20px;right:20px;background:#00C896;color:white;padding:16px 24px;border-radius:8px;font-size:14px;z-index:9999;font-family:Inter,sans-serif';
+          toast.textContent = '🎉 Welcome to ARIA Pro! Unlimited queries unlocked.';
+          document.body.appendChild(toast);
+          setTimeout(function () {
+            toast.remove();
+          }, 5000);
 
           showPaymentSuccessFeedback();
           window.location.href = '/app.html?payment=success';
-
-        if (opts.fromUpgradeModal) {
-          addAriaMsg(
-            '<span style="color:var(--success)"><b>Upgraded to Pro</b> — Payment received. Thank you!</span><br>' +
-              '<span style="color:var(--muted);font-size:12px">Payment ID: ' +
-              esc(String(response.razorpay_payment_id || '—')) +
-              '</span>'
-          );
-          var t = pendingSendText;
-          pendingSendText = null;
-          if (t) {
-            document.getElementById('chatTa').value = '';
-            document.getElementById('chatTa').style.height = 'auto';
-            addUserMsg(t);
-            doSendAria(t);
-          }
-        }
         } catch (_err) {
           setPaymentButtonsLoading(false);
-          alert('Payment received! Contact support to activate Pro.');
+          alert('Payment verification failed. Contact support if amount was deducted.');
         }
       },
     prefill: {
@@ -2653,7 +2661,7 @@ function openRazorpay(amountPaise, opts) {
 }
 
 function launchRazorpayCheckout(opts) {
-  openRazorpay(199900, opts || {});
+  startPayment(199900, opts || {});
 }
 
 window.startRazorpayProUpgrade = launchRazorpayCheckout;
@@ -2661,8 +2669,8 @@ window.startRazorpayProUpgrade = launchRazorpayCheckout;
 (function wireRazorpayBillingButton() {
   var monthly = document.getElementById('rzp-button-monthly');
   var annual = document.getElementById('rzp-button-annual');
-  if (monthly) monthly.onclick = function () { openRazorpay(199900, {}); };
-  if (annual) annual.onclick = function () { openRazorpay(1799900, {}); };
+  if (monthly) monthly.onclick = function () { startPayment(199900, {}); };
+  if (annual) annual.onclick = function () { startPayment(1799900, {}); };
 })();
 
 function applyLocalProPlanUI() {
@@ -3018,12 +3026,29 @@ function updateUsageUI() {
 
   if (isPremiumUser()) {
     badge.style.display = 'none';
+    enableInput();
     return;
   }
 
   const { count, max } = getUsageState();
   badge.style.display = 'inline-flex';
   badge.textContent = `${Math.min(count, max)}/${max} free queries used today`;
+  if (count >= max) disableInput();
+  else enableInput();
+}
+
+function disableInput() {
+  const ta = document.getElementById('chatTa');
+  const btn = document.getElementById('sendBtn');
+  if (ta) ta.disabled = true;
+  if (btn) btn.disabled = true;
+}
+
+function enableInput() {
+  const ta = document.getElementById('chatTa');
+  const btn = document.getElementById('sendBtn');
+  if (ta && !busy) ta.disabled = false;
+  if (btn && !busy) btn.disabled = false;
 }
 
 function checkUsageLimit() {
@@ -3801,81 +3826,103 @@ function saveProp() {
    Finnhub forex rates live feed for EURUSD/AUDUSD.
 ═══════════════════════════════════════════════════════ */
 
-const PRICE_POLL_MS = 30000;
+const PRICE_POLL_MS = 3000;
 const PIP_SIZE = 0.0001;
 
 let lastPrices = { EURUSD: null, AUDUSD: null };
 
-function resolveAudPayloadFromLatest(data) {
+function parsePrice(raw) {
+  return typeof raw === 'number' ? raw : parseFloat(String(raw || '').replace(/,/g, ''));
+}
+
+function getPayloadForSymbol(data, symbol) {
   if (!data || typeof data !== 'object') return null;
-  const raw =
-    data.AUDUSD ||
-    data.audusd ||
-    data['AUD/USD'] ||
-    data['AUDUSD'];
-  if (raw == null) return null;
-  if (typeof raw === 'object') return raw;
+  return data[symbol] || data[symbol.toUpperCase()] || data[symbol.toLowerCase()] || null;
+}
+
+async function fetchPairPayload(symbolFormats) {
+  const formats = Array.isArray(symbolFormats) ? symbolFormats : [String(symbolFormats || '')];
+
+  // First try pair-specific endpoint in requested format order.
+  for (const symbol of formats) {
+    try {
+      const r = await fetch(`${ARIA_SERVER_URL}/latest/${encodeURIComponent(symbol)}`);
+      if (!r.ok) continue;
+      const data = await r.json();
+      if (data && data.price != null) return data;
+    } catch (_err) {}
+  }
+
+  // Fallback to /latest and resolve by keys.
+  const res = await fetch(`${ARIA_SERVER_URL}/latest`);
+  if (!res.ok) throw new Error('Server offline');
+  const data = await res.json();
+  for (const symbol of formats) {
+    const payload = getPayloadForSymbol(data, symbol);
+    if (payload && payload.price != null) return payload;
+  }
   return null;
 }
 
-function audPriceIsFiniteFromPayload(payload) {
-  if (!payload || payload.price == null || payload.price === '') return false;
-  const rawP = payload.price;
-  const n = typeof rawP === 'number' ? rawP : parseFloat(String(rawP).replace(/,/g, ''));
-  return Number.isFinite(n);
+function applyPairPrice(pair, price, payload) {
+  const last = lastPrices[pair];
+  const pips = last ? ((price - last) * 10000).toFixed(1) : '0.0';
+  const dir = last ? (price > last ? '▲' : price < last ? '▼' : '—') : '—';
+  const dirColor = dir === '▲' ? '#00C896' : dir === '▼' ? '#FF4757' : '#888';
+  const ist = new Date(Date.now() + 19800000);
+  const t = `${String(ist.getUTCHours()).padStart(2,'0')}:${String(ist.getUTCMinutes()).padStart(2,'0')}:${String(ist.getUTCSeconds()).padStart(2,'0')}`;
+
+  if (pair === 'EURUSD') {
+    updateEURDisplay(price.toFixed(5), pips, dir, dirColor, t, payload?.bias);
+    lastPrices.EURUSD = price;
+    window.__liveEURUSD = price.toFixed(5);
+    window.__eurBias = payload?.bias || null;
+    window.__eurRSI = payload?.rsi || null;
+    return;
+  }
+
+  updateAUDDisplay(price.toFixed(5), pips, dir, dirColor, t, payload?.bias);
+  const audPriceEl = document.getElementById('audusd-price');
+  if (audPriceEl) audPriceEl.innerText = price.toFixed(5);
+  lastPrices.AUDUSD = price;
+  window.__liveAUDUSD = price.toFixed(5);
+  window.__audBias = payload?.bias || null;
+  window.__audRSI = payload?.rsi || null;
+}
+
+async function fetchEURUSD() {
+  try {
+    const payload = await fetchPairPayload(['EURUSD', 'EUR/USD', 'EURUSD=X']);
+    const price = parsePrice(payload?.price);
+    if (!Number.isFinite(price)) throw new Error('Invalid EURUSD price');
+    applyPairPrice('EURUSD', price, payload);
+  } catch (e) {
+    console.error('EURUSD fetch failed:', e);
+  }
+}
+
+function applyAudFallback() {
+  const fallback = lastPrices.AUDUSD || 0.6700;
+  const payload = { bias: window.__audBias || 'fallback' };
+  applyPairPrice('AUDUSD', fallback, payload);
+}
+
+async function fetchAUDUSD() {
+  try {
+    console.log("Fetching AUDUSD...");
+    const payload = await fetchPairPayload(['AUDUSD', 'AUD/USD', 'AUDUSD=X']);
+    console.log("AUDUSD response:", payload);
+    const price = parsePrice(payload?.price);
+    if (!Number.isFinite(price)) throw new Error('Invalid AUDUSD price');
+    applyPairPrice('AUDUSD', price, payload);
+  } catch (e) {
+    console.error('AUDUSD fetch failed:', e);
+    applyAudFallback();
+  }
 }
 
 async function fetchLivePrices() {
-  try {
-    const res = await fetch(`${ARIA_SERVER_URL}/latest`);
-    if (!res.ok) throw new Error('Server offline');
-    const data = await res.json();
-
-    if (data.EURUSD) {
-      const rawEp = data.EURUSD.price;
-      const price =
-        typeof rawEp === 'number' ? rawEp : parseFloat(String(rawEp).replace(/,/g, ''));
-      if (Number.isFinite(price)) {
-        const last = lastPrices.EURUSD;
-        const pips = last ? ((price - last) * 10000).toFixed(1) : '0.0';
-        const dir = last ? (price > last ? '▲' : price < last ? '▼' : '—') : '—';
-        const dirColor = dir === '▲' ? '#00C896' : dir === '▼' ? '#FF4757' : '#888';
-
-        const ist = new Date(Date.now() + 19800000);
-        const t = `${String(ist.getUTCHours()).padStart(2,'0')}:${String(ist.getUTCMinutes()).padStart(2,'0')}:${String(ist.getUTCSeconds()).padStart(2,'0')}`;
-
-        updateEURDisplay(price.toFixed(5), pips, dir, dirColor, t, data.EURUSD.bias);
-        lastPrices.EURUSD = price;
-        window.__liveEURUSD = price.toFixed(5);
-        window.__eurBias = data.EURUSD.bias;
-        window.__eurRSI = data.EURUSD.rsi;
-      }
-    }
-
-    if (data.AUDUSD) {
-      const rawAp = data.AUDUSD.price;
-      const price =
-        typeof rawAp === 'number' ? rawAp : parseFloat(String(rawAp).replace(/,/g, ''));
-      if (Number.isFinite(price)) {
-        const last = lastPrices.AUDUSD;
-        const pips = last ? ((price - last) * 10000).toFixed(1) : '0.0';
-        const dir = last ? (price > last ? '▲' : price < last ? '▼' : '—') : '—';
-        const dirColor = dir === '▲' ? '#00C896' : dir === '▼' ? '#FF4757' : '#888';
-
-        const ist = new Date(Date.now() + 19800000);
-        const t = `${String(ist.getUTCHours()).padStart(2,'0')}:${String(ist.getUTCMinutes()).padStart(2,'0')}:${String(ist.getUTCSeconds()).padStart(2,'0')}`;
-
-        updateAUDDisplay(price.toFixed(5), pips, dir, dirColor, t, data.AUDUSD.bias);
-        lastPrices.AUDUSD = price;
-        window.__liveAUDUSD = price.toFixed(5);
-        window.__audBias = data.AUDUSD.bias;
-        window.__audRSI = data.AUDUSD.rsi;
-      }
-    }
-
-  } catch(e) {
-    console.log('Price fetch failed, retrying...', e.message);
-  }
+  await Promise.all([fetchEURUSD(), fetchAUDUSD()]);
 }
 
 function updateEURDisplay(price, pips, dir, dirColor, time, bias) {
@@ -3972,7 +4019,10 @@ function updateAUDDisplay(price, pips, dir, dirColor, time, bias, feedKind) {
 }
 
 fetchLivePrices();
-setInterval(fetchLivePrices, 30000);
+setInterval(() => {
+  fetchEURUSD();
+  fetchAUDUSD();
+}, PRICE_POLL_MS);
 
 /* ── BOTTOM NAV SCROLL ─────────────────────────────────── */
 function scrollTo(id, btn) {

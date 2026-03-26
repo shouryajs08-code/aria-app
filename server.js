@@ -6,10 +6,24 @@
 
 const express = require('express');
 const cors    = require('cors');
+const Razorpay = require('razorpay');
+const crypto = require('crypto');
 const app     = express();
 
 app.use(express.json());
 app.use(cors()); // Allow ARIA dashboard to fetch from browser
+
+const RAZORPAY_KEY_ID = process.env.RAZORPAY_KEY_ID || '';
+const RAZORPAY_KEY_SECRET = process.env.RAZORPAY_KEY_SECRET || '';
+const SUPABASE_URL = process.env.SUPABASE_URL || '';
+const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+
+const razorpay = RAZORPAY_KEY_ID && RAZORPAY_KEY_SECRET
+  ? new Razorpay({
+      key_id: RAZORPAY_KEY_ID,
+      key_secret: RAZORPAY_KEY_SECRET,
+    })
+  : null;
 
 // ── IN-MEMORY STORE ───────────────────────────────────────
 // Stores latest data per pair + last 100 candles history
@@ -98,6 +112,86 @@ app.get('/latest', (req, res) => {
     if (val.latest) result[pair] = val.latest;
   }
   res.json(result);
+});
+
+// ══════════════════════════════════════════════════════════
+//  POST /create-order  ←  Create Razorpay order (server-side)
+// ══════════════════════════════════════════════════════════
+app.post('/create-order', async (req, res) => {
+  try {
+    if (!razorpay) {
+      return res.status(500).json({ error: 'Razorpay is not configured' });
+    }
+    const amount = Number(req.body?.amount || 0);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      return res.status(400).json({ error: 'Invalid amount' });
+    }
+
+    const order = await razorpay.orders.create({
+      amount: Math.round(amount), // paise
+      currency: 'INR',
+    });
+    res.json(order);
+  } catch (_err) {
+    res.status(500).json({ error: 'Order creation failed' });
+  }
+});
+
+// ══════════════════════════════════════════════════════════
+//  POST /verify-payment  ←  Verify signature + upgrade plan
+// ══════════════════════════════════════════════════════════
+app.post('/verify-payment', async (req, res) => {
+  try {
+    const {
+      razorpay_payment_id,
+      razorpay_order_id,
+      razorpay_signature,
+      user_id,
+    } = req.body || {};
+
+    if (!razorpay_payment_id || !razorpay_order_id || !razorpay_signature || !user_id) {
+      return res.status(400).json({ success: false, error: 'Missing required fields' });
+    }
+    if (!RAZORPAY_KEY_SECRET || !SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+      return res.status(500).json({ success: false, error: 'Server env is not configured' });
+    }
+
+    const body = `${razorpay_order_id}|${razorpay_payment_id}`;
+    const expectedSignature = crypto
+      .createHmac('sha256', RAZORPAY_KEY_SECRET)
+      .update(body)
+      .digest('hex');
+
+    if (expectedSignature !== razorpay_signature) {
+      return res.status(400).json({ success: false, error: 'Invalid signature' });
+    }
+
+    const patchRes = await fetch(
+      `${SUPABASE_URL}/rest/v1/users?id=eq.${encodeURIComponent(user_id)}`,
+      {
+        method: 'PATCH',
+        headers: {
+          apikey: SUPABASE_SERVICE_ROLE_KEY,
+          Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+          'Content-Type': 'application/json',
+          Prefer: 'return=minimal',
+        },
+        body: JSON.stringify({
+          plan: 'pro',
+          payment_id: razorpay_payment_id,
+          upgraded_at: new Date().toISOString(),
+        }),
+      }
+    );
+
+    if (!patchRes.ok) {
+      return res.status(500).json({ success: false, error: 'Plan update failed' });
+    }
+
+    return res.json({ success: true });
+  } catch (_err) {
+    return res.status(500).json({ error: 'Verification failed' });
+  }
 });
 
 // ══════════════════════════════════════════════════════════
