@@ -1554,6 +1554,13 @@ body.aria-auth-locked .app {
   const applyUserProfileUI = (user, plan) => {
     const label = String(plan || 'free').toLowerCase() === 'pro' ? 'Pro' : 'Free';
     const email = user?.email || '—';
+    if (label === 'Pro') {
+      localStorage.setItem('userPlan', 'pro');
+      localStorage.setItem('aria_client_plan', 'pro');
+    } else {
+      localStorage.removeItem('userPlan');
+      localStorage.removeItem('aria_client_plan');
+    }
 
     const headerEmail = document.getElementById('ariaUserEmail');
     const headerPlan = document.getElementById('ariaUserPlanBadge');
@@ -1622,6 +1629,12 @@ body.aria-auth-locked .app {
   };
 
   document.addEventListener('DOMContentLoaded', () => {
+    const paymentMsg = sessionStorage.getItem('aria_payment_success_msg');
+    if (paymentMsg) {
+      sessionStorage.removeItem('aria_payment_success_msg');
+      alert(paymentMsg);
+    }
+
     const googleBtn = document.getElementById('ariaGoogleBtn');
     if (googleBtn) {
       googleBtn.addEventListener('click', async () => {
@@ -1630,10 +1643,10 @@ body.aria-auth-locked .app {
         try {
           await googleOAuthLogin();
         } catch (err) {
-          console.error(err);
+          const message = err && err.message ? err.message : 'Sign in failed. Please try again.';
           googleBtn.disabled = false;
           googleBtn.textContent = 'Sign in with Google';
-          alert('Sign in failed. Please try again.');
+          alert(message);
         }
       });
     }
@@ -1776,6 +1789,8 @@ body.aria-auth-locked .app {
       <div class="card-header">
         <div class="card-title">Ask ARIA</div>
         <div style="display:flex;align-items:center;gap:8px;">
+          <button type="button" id="freeUpgradeBtn" class="card-badge" style="display:none;border-color:rgba(26,86,219,0.45);background:rgba(26,86,219,0.14);color:#cfe0ff;cursor:pointer" onclick="if(typeof openProBillingModal==='function'){openProBillingModal()}else if(typeof showUpgradeModal==='function'){showUpgradeModal()}">Upgrade to Pro</button>
+          <div id="freeUsageBadge" class="card-badge" style="display:none;border-color:rgba(255,255,255,0.15);background:rgba(255,255,255,0.06);color:rgba(255,255,255,0.85)">0/10 free queries used today</div>
           <div id="liveDataStatus" style="display:flex;align-items:center;gap:5px;">
             <div class="lds-dot off" id="ldsDot"></div>
             <span id="ldsText" style="font-family:var(--sf-mono);font-size:9px;color:#444;letter-spacing:0.1em">—</span>
@@ -2475,6 +2490,22 @@ window.showUpgradeModal = showUpgradeModal;
 
 const RAZORPAY_KEY = window.__ARIA_ENV__?.VITE_RAZORPAY_KEY || 'rzp_live_SVp1QqsdfUslF0';
 
+function setPaymentButtonsLoading(isLoading) {
+  var monthly = document.getElementById('rzp-button-monthly');
+  var annual = document.getElementById('rzp-button-annual');
+  [monthly, annual].forEach(function (btn) {
+    if (!btn) return;
+    if (!btn.dataset.defaultText) btn.dataset.defaultText = btn.textContent;
+    btn.disabled = isLoading;
+    btn.style.opacity = isLoading ? '0.7' : '1';
+    btn.textContent = isLoading ? 'Processing...' : btn.dataset.defaultText;
+  });
+}
+
+function showPaymentSuccessFeedback() {
+  sessionStorage.setItem('aria_payment_success_msg', 'Payment successful. Your Pro plan is now active.');
+}
+
 function openProBillingModal() {
   if (typeof closeModal === 'function') closeModal();
   const overlay = document.getElementById('ariaProBillingOverlay');
@@ -2488,40 +2519,42 @@ window.openManualUpgradeModal = openProBillingModal;
 window.closeProBillingModal = closeProBillingModal;
 
 function openRazorpay(amountPaise, opts) {
-  opts = opts || {};
-  var amount = amountPaise != null ? amountPaise : 199900;
-  if (typeof Razorpay === 'undefined') {
-    alert('Razorpay script failed to load. Refresh the page and try again.');
-    return;
-  }
-  var user = window.__ARIA_USER__ || (window.__ARIA_AUTH__ && window.__ARIA_AUTH__.user);
-  if (!user || !user.id) {
-    alert('Please sign in with Google to upgrade.');
-    return;
-  }
+  try {
+    opts = opts || {};
+    var amount = amountPaise != null ? amountPaise : 199900;
+    if (typeof Razorpay === 'undefined') {
+      alert('Razorpay script failed to load. Refresh the page and try again.');
+      return;
+    }
+    var user = window.__ARIA_USER__ || (window.__ARIA_AUTH__ && window.__ARIA_AUTH__.user);
+    if (!user || !user.id) {
+      alert('Please sign in with Google to upgrade.');
+      return;
+    }
+    setPaymentButtonsLoading(true);
 
-  var options = {
-    key: RAZORPAY_KEY,
-    amount: amount,
-    currency: 'INR',
-    name: 'ARIA Trading',
-    description: 'Pro Plan — Unlimited AI Trading Analysis',
-    handler: async function (response) {
-      try {
-        const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2');
-        const supabase = createClient(
-          'https://dontnxkzdwkcphhtswrj.supabase.co',
-          'sb_publishable_0uUsa3CC3LLm77Kc4ayR6Q_MBT'
-        );
+    var options = {
+      key: RAZORPAY_KEY,
+      amount: amount,
+      currency: 'INR',
+      name: 'ARIA Trading',
+      description: 'Pro Plan — Unlimited AI Trading Analysis',
+      handler: async function (response) {
+        try {
+          const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2');
+          const supabase = createClient(
+            'https://dontnxkzdwkcphhtswrj.supabase.co',
+            'sb_publishable_0uUsa3CC3LLm77Kc4ayR6Q_MBT'
+          );
 
-        await supabase
-          .from('users')
-          .update({
-            plan: 'pro',
-            payment_id: response.razorpay_payment_id,
-            upgraded_at: new Date().toISOString(),
-          })
-          .eq('id', user.id);
+          await supabase
+            .from('users')
+            .update({
+              plan: 'pro',
+              payment_id: response.razorpay_payment_id,
+              upgraded_at: new Date().toISOString(),
+            })
+            .eq('id', user.id);
 
         document.querySelectorAll('.plan-badge, #planBadge').forEach(function (el) {
           el.textContent = 'Pro';
@@ -2536,7 +2569,9 @@ function openRazorpay(amountPaise, opts) {
           'aria_razorpay_last_payment',
           JSON.stringify({ razorpay_payment_id: response.razorpay_payment_id, capturedAt: Date.now(), amount_paise: amount, currency: 'INR' })
         );
+        var planName = amount >= 1799900 ? 'pro_annual' : 'pro_monthly';
         localStorage.setItem('aria_client_plan', 'pro');
+        localStorage.setItem('userPlan', planName);
         sessionStorage.setItem('aria_upgrade_ack', '1');
 
         applyLocalProPlanUI();
@@ -2565,7 +2600,8 @@ function openRazorpay(amountPaise, opts) {
           toast.remove();
         }, 5000);
 
-        window.location.href = '/app.html?payment=success';
+          showPaymentSuccessFeedback();
+          window.location.href = '/app.html?payment=success';
 
         if (opts.fromUpgradeModal) {
           addAriaMsg(
@@ -2583,10 +2619,11 @@ function openRazorpay(amountPaise, opts) {
             doSendAria(t);
           }
         }
-      } catch (_err) {
-        alert('Payment received! Contact support to activate Pro.');
-      }
-    },
+        } catch (_err) {
+          setPaymentButtonsLoading(false);
+          alert('Payment received! Contact support to activate Pro.');
+        }
+      },
     prefill: {
       email: user.email || '',
       name: (user.user_metadata && user.user_metadata.full_name) || 'Trader',
@@ -2596,16 +2633,23 @@ function openRazorpay(amountPaise, opts) {
       plan: amount >= 1799900 ? 'pro_annual' : 'pro_monthly',
     },
     theme: { color: '#1A56DB' },
-    modal: {
-      ondismiss: function () {},
-    },
-  };
+      modal: {
+        ondismiss: function () {
+          setPaymentButtonsLoading(false);
+        },
+      },
+    };
 
-  var rzp = new Razorpay(options);
-  rzp.on('payment.failed', function () {
-    alert('Payment failed, try again');
-  });
-  rzp.open();
+    var rzp = new Razorpay(options);
+    rzp.on('payment.failed', function () {
+      setPaymentButtonsLoading(false);
+      alert('Payment failed. Please try again.');
+    });
+    rzp.open();
+  } catch (_err) {
+    setPaymentButtonsLoading(false);
+    alert('Payment failed. Please try again.');
+  }
 }
 
 function launchRazorpayCheckout(opts) {
@@ -2640,6 +2684,16 @@ function restoreClientProPlanIfPaid() {
     applyLocalProPlanUI();
   }
 }
+
+// Initialize free usage badge on load and on auth/plan changes.
+document.addEventListener('DOMContentLoaded', () => {
+  updatePremiumUI();
+  updateUsageUI();
+});
+window.addEventListener('ariaauthchange', () => {
+  updatePremiumUI();
+  updateUsageUI();
+});
 
 let socialProofIdx = 0;
 function initSocialProofTicker() {
@@ -2901,6 +2955,97 @@ function savePropLocal() {
 }
 
 /* ── CHAT ──────────────────────────────────────────────── */
+const FREE_DAILY_LIMIT = 10;
+const PREMIUM_SECTIONS = new Set(['sec-signals', 'sec-risk']);
+const PREMIUM_QUERY_HINTS = ['analyse', 'analysis', 'signal', 'daily brief', 'risk check', 'ict', 'smc'];
+
+function getTodayKey() {
+  // Local date key to match user expectation of "today"
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+function getUserPlanLocal() {
+  const explicitPlan = localStorage.getItem('userPlan');
+  if (explicitPlan) return String(explicitPlan).toLowerCase();
+  const legacyPlan = localStorage.getItem('aria_client_plan');
+  return legacyPlan ? String(legacyPlan).toLowerCase() : null;
+}
+
+function isPremiumUser() {
+  return localStorage.getItem('userPlan') !== null;
+}
+window.isPremiumUser = isPremiumUser;
+
+function updatePremiumUI() {
+  const freeUpgradeBtn = document.getElementById('freeUpgradeBtn');
+  if (freeUpgradeBtn) freeUpgradeBtn.style.display = isPremiumUser() ? 'none' : 'inline-flex';
+}
+
+function showPremiumBlockedMessage() {
+  addAriaMsg('<span style="color:var(--warn)">Upgrade to access this feature</span>');
+  if (typeof showUpgradeModal === 'function') showUpgradeModal();
+}
+
+function requirePremiumFeature() {
+  if (isPremiumUser()) return true;
+  showPremiumBlockedMessage();
+  return false;
+}
+
+function isPremiumFeatureQuery(text) {
+  const q = String(text || '').toLowerCase();
+  return PREMIUM_QUERY_HINTS.some((hint) => q.includes(hint));
+}
+
+function getUsageState() {
+  const storedDate = localStorage.getItem('usageDate') || '';
+  const today = getTodayKey();
+  if (storedDate !== today) {
+    localStorage.setItem('usageDate', today);
+    localStorage.setItem('dailyUsageCount', '0');
+  }
+  const count = Math.max(0, parseInt(localStorage.getItem('dailyUsageCount') || '0', 10) || 0);
+  return { today, count, max: FREE_DAILY_LIMIT };
+}
+
+function updateUsageUI() {
+  const badge = document.getElementById('freeUsageBadge');
+  if (!badge) return;
+
+  if (isPremiumUser()) {
+    badge.style.display = 'none';
+    return;
+  }
+
+  const { count, max } = getUsageState();
+  badge.style.display = 'inline-flex';
+  badge.textContent = `${Math.min(count, max)}/${max} free queries used today`;
+}
+
+function checkUsageLimit() {
+  if (isPremiumUser()) return true;
+  const { count, max } = getUsageState();
+  updateUsageUI();
+  return count < max;
+}
+
+function incrementUsage() {
+  if (isPremiumUser()) return;
+  const state = getUsageState();
+  const next = Math.min(state.max, state.count + 1);
+  localStorage.setItem('dailyUsageCount', String(next));
+  updateUsageUI();
+}
+
+function showUsageLimitPopup() {
+  alert("You've reached your free limit. Upgrade to continue.");
+  if (typeof showUpgradeModal === 'function') showUpgradeModal();
+}
+
 function onKey(e) {
   if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
 }
@@ -2911,6 +3056,7 @@ function growTa(el) {
 }
 
 function quick(text) {
+  if (isPremiumFeatureQuery(text) && !requirePremiumFeature()) return;
   document.getElementById('chatTa').value = text;
   growTa(document.getElementById('chatTa'));
   send();
@@ -2933,9 +3079,17 @@ async function send() {
     return;
   }
 
+  if (isPremiumFeatureQuery(text) && !requirePremiumFeature()) return;
+
+  if (!checkUsageLimit()) {
+    showUsageLimitPopup();
+    return;
+  }
+
   ta.value = '';
   ta.style.height = 'auto';
   addUserMsg(text);
+  incrementUsage();
   await doSendAria(text);
 }
 
@@ -3400,6 +3554,11 @@ function renderNews(events, nowMs) {
 function renderSignals() {
   const body = document.getElementById('signalBody');
   const count = document.getElementById('signalCount');
+  if (!isPremiumUser()) {
+    count.textContent = 'Premium';
+    body.innerHTML = '<div class="signal-empty">Upgrade to access this feature</div>';
+    return;
+  }
   count.textContent = signals.length + ' signal' + (signals.length!==1?'s':'');
   if (!signals.length) {
     body.innerHTML = '<div class="signal-empty">No signals yet. Ask ARIA for pair analysis.</div>';
@@ -3817,6 +3976,7 @@ setInterval(fetchLivePrices, 30000);
 
 /* ── BOTTOM NAV SCROLL ─────────────────────────────────── */
 function scrollTo(id, btn) {
+  if (PREMIUM_SECTIONS.has(id) && !requirePremiumFeature()) return;
   document.getElementById(id).scrollIntoView({ behavior:'smooth', block:'start' });
   document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
   btn.classList.add('active');

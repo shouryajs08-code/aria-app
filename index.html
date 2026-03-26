@@ -60,7 +60,7 @@
               <span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-400 opacity-75"></span>
               <span class="relative inline-flex h-2 w-2 rounded-full bg-red-500"></span>
             </span>
-            <span>🔴 LIVE — 247 traders active right now</span>
+            <span>● 247 traders active now</span>
           </p>
           <h1 class="text-3xl font-extrabold leading-tight tracking-tight text-white sm:text-4xl lg:text-5xl">
             The AI trading co-pilot built for<br class="hidden sm:block" /> prop firm traders
@@ -77,7 +77,10 @@
             </a>
           </div>
           <p class="mt-8 text-sm text-gray-500">
-            Used by 247+ prop traders · FTMO · MyForexFunds · The Funded Trader
+            Used by 200+ prop traders · FTMO · MyForexFunds · Funded Trader
+          </p>
+          <p class="mt-2 text-sm text-gray-400 italic">
+            "Helped me pass my FTMO challenge faster"
           </p>
         </div>
         <div class="relative lg:pl-4">
@@ -95,6 +98,24 @@
               <span class="font-medium">Good to trade</span>
             </div>
           </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══ SECTION 2.5 — PRODUCT SCREENSHOT ═══ -->
+    <section class="border-b border-white/5 px-4 py-14 sm:px-6 sm:py-16">
+      <div class="mx-auto max-w-5xl">
+        <div class="mb-6 text-center">
+          <h2 class="text-2xl font-bold text-white sm:text-3xl">See ARIA analysis UI</h2>
+          <p class="mt-2 text-sm text-gray-400">Clean terminal view with live prices, risk score, and AI trade analysis.</p>
+        </div>
+        <div class="overflow-hidden rounded-2xl border border-white/10 bg-[#12121a] shadow-xl shadow-black/30">
+          <img
+            src="https://dummyimage.com/1400x760/0f1117/9ca3af&text=ARIA+Analysis+UI+Preview"
+            alt="ARIA analysis UI screenshot"
+            class="h-auto w-full"
+            loading="lazy"
+          />
         </div>
       </div>
     </section>
@@ -205,18 +226,26 @@
           <!-- PRO -->
           <div class="relative flex flex-col rounded-2xl border-2 border-[#1A56DB] bg-[#12121a] p-6 shadow-xl shadow-[#1A56DB]/10">
             <span class="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-[#1A56DB] px-3 py-0.5 text-xs font-semibold text-white">Most Popular</span>
-            <h3 class="text-lg font-semibold text-white">Pro</h3>
-            <p class="mt-4 text-3xl font-bold text-white">₹1,999<span class="text-base font-normal text-gray-500">/mo</span></p>
-            <p class="text-sm text-gray-400">or ₹17,999/yr <span class="text-emerald-400">(save 25%)</span></p>
-            <ul class="mt-6 flex-1 space-y-3 text-sm text-gray-300">
-              <li>Unlimited AI queries</li>
-              <li>Auto pre-session brief</li>
-              <li>Live economic alerts</li>
-              <li>Cloud sync all devices</li>
-              <li>All prop firm presets</li>
-              <li>Priority support</li>
+            <h3 class="text-lg font-semibold text-white text-center">Pro Plan</h3>
+            <p class="mt-4 text-center text-4xl font-extrabold tracking-tight text-white">₹1999<span class="text-base font-normal text-gray-500">/month</span></p>
+
+            <div class="mt-3 rounded-xl border border-amber-500/25 bg-amber-500/10 px-4 py-3 text-center">
+              <div class="text-sm font-semibold text-amber-300">🔥 ₹999 for first 50 users</div>
+              <div class="mt-1 text-xs text-gray-400">
+                Limited time offer · Only <span id="spotsLeft" class="font-semibold text-white">—</span> spots left
+              </div>
+            </div>
+
+            <ul class="mt-6 flex-1 space-y-3 text-sm text-gray-200">
+              <li>AI trade analysis</li>
+              <li>Risk scoring</li>
+              <li>Prop firm rules tracking</li>
+              <li>Unlimited usage</li>
             </ul>
-            <a href="./app.html" class="mt-8 block w-full rounded-xl bg-[#1A56DB] py-3 text-center font-semibold text-white transition hover:bg-blue-600">Start 7-Day Free Trial</a>
+
+            <button onclick="payNow(1999, 'Pro Plan')" class="mt-8 block w-full rounded-xl bg-[#1A56DB] py-3 text-center font-semibold text-white transition hover:bg-blue-600">
+              Upgrade Now
+            </button>
           </div>
           <!-- TEAM -->
           <div class="flex flex-col rounded-2xl border border-white/10 bg-[#12121a] p-6">
@@ -369,6 +398,28 @@
       </p>
     </div>
   </footer>
+
+  <script>
+    (function () {
+      // Urgency: stable per-user number (no flicker on refresh)
+      var stored = sessionStorage.getItem('aria_spots_left');
+      var spots = stored ? parseInt(stored, 10) : null;
+      if (!spots || Number.isNaN(spots)) {
+        spots = 7 + Math.floor(Math.random() * 19); // 7..25
+        sessionStorage.setItem('aria_spots_left', String(spots));
+      }
+      var el = document.getElementById('spotsLeft');
+      if (el) el.textContent = String(spots);
+
+      window.payNow = function (priceInr, planName) {
+        try {
+          localStorage.setItem('aria_selected_plan', String(planName || 'Pro Plan'));
+          localStorage.setItem('aria_selected_price_inr', String(priceInr || 1999));
+        } catch (_e) {}
+        window.location.href = './app.html';
+      };
+    })();
+  </script>
 
 </body>
 </html>
