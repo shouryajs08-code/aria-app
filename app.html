@@ -3827,15 +3827,23 @@ function saveProp() {
 ═══════════════════════════════════════════════════════ */
 
 const PRICE_POLL_MS = 3000;
-const PIP_SIZE = 0.0001;
-let lastPrices = { EURUSD: null, AUDUSD: null };
 
 async function fetchPrice(symbol) {
   try {
     const res = await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${symbol}`);
     const data = await res.json();
-    const price = data?.chart?.result?.[0]?.meta?.regularMarketPrice;
-    return Number.isFinite(price) ? price : null;
+
+    console.log("RAW:", data);
+
+    const result = data.chart?.result?.[0];
+
+    if (!result) return null;
+
+    const price = result.meta?.regularMarketPrice;
+
+    console.log(symbol, "PRICE:", price);
+
+    return price;
   } catch (e) {
     console.error("Fetch error:", e);
     return null;
@@ -3843,42 +3851,30 @@ async function fetchPrice(symbol) {
 }
 
 async function fetchEURUSD() {
-  try {
-    const price = await fetchPrice("EURUSD=X");
-    if (!price) return;
-    const last = lastPrices.EURUSD;
-    const pips = last ? ((price - last) * 10000).toFixed(1) : '0.0';
-    const dir = last ? (price > last ? '▲' : price < last ? '▼' : '—') : '—';
-    const dirColor = dir === '▲' ? '#00C896' : dir === '▼' ? '#FF4757' : '#888';
-    const ist = new Date(Date.now() + 19800000);
-    const t = `${String(ist.getUTCHours()).padStart(2,'0')}:${String(ist.getUTCMinutes()).padStart(2,'0')}:${String(ist.getUTCSeconds()).padStart(2,'0')}`;
-    updateEURDisplay(price.toFixed(5), pips, dir, dirColor, t, null);
-    lastPrices.EURUSD = price;
+  const price = await fetchPrice("EURUSD=X");
+
+  const el = document.getElementById("eurusd-price");
+
+  if (el) {
+    el.innerText = price ? price.toFixed(5) : "—";
+  }
+
+  if (price) {
     window.__liveEURUSD = price.toFixed(5);
-    const el = document.getElementById("eurusd-price");
-    if (el) el.innerText = price.toFixed(5);
-  } catch (e) {
-    console.error("EURUSD error:", e);
   }
 }
 
 async function fetchAUDUSD() {
-  try {
-    const price = await fetchPrice("AUDUSD=X");
-    if (!price) return;
-    const last = lastPrices.AUDUSD;
-    const pips = last ? ((price - last) * 10000).toFixed(1) : '0.0';
-    const dir = last ? (price > last ? '▲' : price < last ? '▼' : '—') : '—';
-    const dirColor = dir === '▲' ? '#00C896' : dir === '▼' ? '#FF4757' : '#888';
-    const ist = new Date(Date.now() + 19800000);
-    const t = `${String(ist.getUTCHours()).padStart(2,'0')}:${String(ist.getUTCMinutes()).padStart(2,'0')}:${String(ist.getUTCSeconds()).padStart(2,'0')}`;
-    updateAUDDisplay(price.toFixed(5), pips, dir, dirColor, t, null);
-    lastPrices.AUDUSD = price;
+  const price = await fetchPrice("AUDUSD=X");
+
+  const el = document.getElementById("audusd-price");
+
+  if (el) {
+    el.innerText = price ? price.toFixed(5) : "—";
+  }
+
+  if (price) {
     window.__liveAUDUSD = price.toFixed(5);
-    const el = document.getElementById("audusd-price");
-    if (el) el.innerText = price.toFixed(5);
-  } catch (e) {
-    console.error("AUDUSD error:", e);
   }
 }
 
@@ -3980,16 +3976,13 @@ function updateAUDDisplay(price, pips, dir, dirColor, time, bias, feedKind) {
 }
 
 function startPriceFeed() {
-  try {
+  fetchEURUSD();
+  fetchAUDUSD();
+
+  setInterval(() => {
     fetchEURUSD();
     fetchAUDUSD();
-    setInterval(() => {
-      fetchEURUSD();
-      fetchAUDUSD();
-    }, PRICE_POLL_MS);
-  } catch (e) {
-    console.error('Price feed loop error:', e);
-  }
+  }, PRICE_POLL_MS);
 }
 
 window.addEventListener("load", startPriceFeed);
