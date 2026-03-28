@@ -1,32 +1,50 @@
 // ═══════════════════════════════════════════════════════════
 //  ARIA LIVE DATA SERVER
-//  Receives TradingView webhooks → serves to ARIA dashboard
-//  Deploy free on Railway.app in 5 minutes
+//  Finnhub WebSocket → in-memory prices → ARIA dashboard
+//  Optional POST /webhook | /update for bias / legacy payloads
 // ═══════════════════════════════════════════════════════════
 
 const express = require('express');
-const cors    = require('cors');
+const cors = require('cors');
 const Razorpay = require('razorpay');
 const crypto = require('crypto');
-const app     = express();
+const WebSocket = require('ws');
+
+const app = express();
 
 app.use(express.json());
-app.use(cors()); // Allow ARIA dashboard to fetch from browser
+app.use(cors());
 
 const RAZORPAY_KEY_ID = process.env.RAZORPAY_KEY_ID || '';
 const RAZORPAY_KEY_SECRET = process.env.RAZORPAY_KEY_SECRET || '';
 const SUPABASE_URL = process.env.SUPABASE_URL || '';
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 
-const razorpay = RAZORPAY_KEY_ID && RAZORPAY_KEY_SECRET
-  ? new Razorpay({
-      key_id: RAZORPAY_KEY_ID,
-      key_secret: RAZORPAY_KEY_SECRET,
-    })
-  : null;
+const FINNHUB_TOKEN =
+  process.env.FINNHUB_API_KEY || 'd715svpr01ql6rg1g4egd715svpr01ql6rg1g4f0';
+const FINNHUB_WS_URL = `wss://ws.finnhub.io?token=${FINNHUB_TOKEN}`;
 
-// ── IN-MEMORY STORE ───────────────────────────────────────
-// Stores latest data per pair + last 100 candles history
+const razorpay =
+  RAZORPAY_KEY_ID && RAZORPAY_KEY_SECRET
+    ? new Razorpay({
+        key_id: RAZORPAY_KEY_ID,
+        key_secret: RAZORPAY_KEY_SECRET,
+      })
+    : null;
+
+// ── FINNHUB → PAIR (store keys) ─────────────────────────────
+const FINNHUB_SYMBOL_TO_PAIR = {
+  'OANDA:EUR_USD': 'EURUSD',
+  'OANDA:AUD_USD': 'AUDUSD',
+};
+
+// ── IN-MEMORY PRICE STORE (Finnhub WS) ─────────────────────
+const prices = {
+  EURUSD: null, // { price, timestamp } — timestamp ms
+  AUDUSD: null,
+};
+
+// ── IN-MEMORY STORE (latest + history, /latest & legacy) ───
 const store = {
   EURUSD: { latest: null, history: [] },
   AUDUSD: { latest: null, history: [] },
@@ -34,21 +52,127 @@ const store = {
   XAUUSD: { latest: null, history: [] },
 };
 
-// ── HELPER: Clean pair name ───────────────────────────────
+function istTimeString() {
+  return (
+    new Date(Date.now() + 5.5 * 3600000)
+      .toISOString()
+      .replace('T', ' ')
+      .slice(0, 19) + ' IST'
+  );
+}
+
+function applyFinnhubTrade(pairKey, price, timestampMs) {
+  prices[pairKey] = { price, timestamp: timestampMs };
+  const prev = store[pairKey].latest || {};
+  const enriched = {
+    ...prev,
+    pair: pairKey,
+    price,
+    timestamp: timestampMs,
+    server_time: new Date().toISOString(),
+    ist_time: istTimeString(),
+    source: 'finnhub-ws',
+  };
+  store[pairKey].latest = enriched;
+  store[pairKey].history.unshift(enriched);
+  if (store[pairKey].history.length > 100) {
+    store[pairKey].history = store[pairKey].history.slice(0, 100);
+  }
+}
+
+// ── FINNHUB WEBSOCKET (reconnect + heartbeat) ──────────────
+let finnhubPingTimer = null;
+let finnhubReconnectTimer = null;
+let finnhubWsConnected = false;
+
+function clearFinnhubPing() {
+  if (finnhubPingTimer) {
+    clearInterval(finnhubPingTimer);
+    finnhubPingTimer = null;
+  }
+}
+
+function startFinnhubWebSocket() {
+  if (finnhubReconnectTimer) {
+    clearTimeout(finnhubReconnectTimer);
+    finnhubReconnectTimer = null;
+  }
+
+  clearFinnhubPing();
+  finnhubWsConnected = false;
+
+  const ws = new WebSocket(FINNHUB_WS_URL);
+
+  ws.on('open', () => {
+    finnhubWsConnected = true;
+    console.log('✅ Finnhub WebSocket connected');
+    ws.send(JSON.stringify({ type: 'subscribe', symbol: 'OANDA:EUR_USD' }));
+    ws.send(JSON.stringify({ type: 'subscribe', symbol: 'OANDA:AUD_USD' }));
+
+    finnhubPingTimer = setInterval(() => {
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: 'ping' }));
+      }
+    }, 30000);
+  });
+
+  ws.on('message', (raw) => {
+    let msg;
+    try {
+      msg = JSON.parse(raw.toString());
+    } catch {
+      return;
+    }
+
+    if (msg.type !== 'trade' || !Array.isArray(msg.data)) return;
+
+    for (const row of msg.data) {
+      const sym = row.s;
+      const pairKey = FINNHUB_SYMBOL_TO_PAIR[sym];
+      if (!pairKey || row.p == null) continue;
+
+      const t = row.t;
+      const timestampMs =
+        typeof t === 'number' ? t : Date.now();
+
+      applyFinnhubTrade(pairKey, row.p, timestampMs);
+    }
+  });
+
+  ws.on('close', (code, reason) => {
+    finnhubWsConnected = false;
+    clearFinnhubPing();
+    try {
+      ws.removeAllListeners();
+    } catch (_) {}
+    console.warn(
+      `Finnhub WebSocket closed (${code}) ${reason || ''} — reconnect in 5s`
+    );
+    finnhubReconnectTimer = setTimeout(() => {
+      finnhubReconnectTimer = null;
+      startFinnhubWebSocket();
+    }, 5000);
+  });
+
+  ws.on('error', (err) => {
+    console.error('Finnhub WebSocket error:', err && err.message ? err.message : err);
+  });
+}
+
+// ── HELPER: Clean pair name ─────────────────────────────────
 function cleanPair(raw) {
   if (!raw) return null;
-  // TradingView sends "OANDA:EURUSD" or just "EURUSD"
   const clean = raw.toUpperCase().replace(/^[A-Z]+:/, '');
   return store[clean] ? clean : null;
 }
 
 // ══════════════════════════════════════════════════════════
-//  POST /webhook  ←  TradingView sends data here
+//  POST /webhook  ←  Legacy TradingView / custom (bias, etc.)
 // ══════════════════════════════════════════════════════════
-app.post('/webhook', (req, res) => {
+function handleLegacyPriceUpdate(req, res) {
   try {
     const data = req.body;
-    console.log('📥 Webhook received:', JSON.stringify(data).slice(0, 120));
+    console.log('📥 Legacy POST received:', JSON.stringify(data).slice(0, 120));
 
     const pair = cleanPair(data.pair);
     if (!pair) {
@@ -56,37 +180,44 @@ app.post('/webhook', (req, res) => {
       return res.status(400).json({ error: 'Unknown pair' });
     }
 
-    // Add server timestamp
     const enriched = {
       ...data,
       pair,
       server_time: new Date().toISOString(),
-      ist_time: new Date(Date.now() + 5.5 * 3600000)
-        .toISOString()
-        .replace('T', ' ')
-        .slice(0, 19) + ' IST',
+      ist_time: istTimeString(),
     };
 
-    // Store as latest
     store[pair].latest = enriched;
-
-    // Add to history (keep last 100 candles)
     store[pair].history.unshift(enriched);
     if (store[pair].history.length > 100) {
       store[pair].history = store[pair].history.slice(0, 100);
     }
 
+    if (data.price != null && (pair === 'EURUSD' || pair === 'AUDUSD')) {
+      const ts =
+        typeof data.timestamp === 'number'
+          ? data.timestamp
+          : Date.now();
+      prices[pair] = { price: data.price, timestamp: ts };
+    }
+
     console.log(`✅ ${pair} updated — Price: ${data.price} | Bias: ${data.bias}`);
     res.json({ ok: true, pair, price: data.price, bias: data.bias });
-
   } catch (err) {
-    console.error('❌ Webhook error:', err.message);
+    console.error('❌ Legacy update error:', err.message);
     res.status(500).json({ error: err.message });
   }
-});
+}
+
+app.post('/webhook', handleLegacyPriceUpdate);
 
 // ══════════════════════════════════════════════════════════
-//  GET /latest/:pair  ←  ARIA fetches this
+//  POST /update  ←  Same as /webhook (backward compatibility)
+// ══════════════════════════════════════════════════════════
+app.post('/update', handleLegacyPriceUpdate);
+
+// ══════════════════════════════════════════════════════════
+//  GET /latest/:pair
 // ══════════════════════════════════════════════════════════
 app.get('/latest/:pair', (req, res) => {
   const pair = cleanPair(req.params.pair);
@@ -96,7 +227,7 @@ app.get('/latest/:pair', (req, res) => {
   if (!data) {
     return res.status(404).json({
       error: 'No data yet',
-      message: `No webhook received for ${pair} yet. Check TradingView alert is running.`
+      message: `No live data for ${pair} yet. Finnhub WebSocket may still be connecting.`,
     });
   }
 
@@ -104,7 +235,7 @@ app.get('/latest/:pair', (req, res) => {
 });
 
 // ══════════════════════════════════════════════════════════
-//  GET /latest  ←  ARIA fetches ALL pairs at once
+//  GET /latest  ←  All pairs that have data
 // ══════════════════════════════════════════════════════════
 app.get('/latest', (req, res) => {
   const result = {};
@@ -115,7 +246,7 @@ app.get('/latest', (req, res) => {
 });
 
 // ══════════════════════════════════════════════════════════
-//  POST /create-order  ←  Create Razorpay order (server-side)
+//  POST /create-order
 // ══════════════════════════════════════════════════════════
 app.post('/create-order', async (req, res) => {
   try {
@@ -128,7 +259,7 @@ app.post('/create-order', async (req, res) => {
     }
 
     const order = await razorpay.orders.create({
-      amount: Math.round(amount), // paise
+      amount: Math.round(amount),
       currency: 'INR',
     });
     res.json(order);
@@ -138,7 +269,7 @@ app.post('/create-order', async (req, res) => {
 });
 
 // ══════════════════════════════════════════════════════════
-//  POST /verify-payment  ←  Verify signature + upgrade plan
+//  POST /verify-payment
 // ══════════════════════════════════════════════════════════
 app.post('/verify-payment', async (req, res) => {
   try {
@@ -195,46 +326,50 @@ app.post('/verify-payment', async (req, res) => {
 });
 
 // ══════════════════════════════════════════════════════════
-//  GET /history/:pair  ←  Last N candles
+//  GET /history/:pair
 // ══════════════════════════════════════════════════════════
 app.get('/history/:pair', (req, res) => {
-  const pair  = cleanPair(req.params.pair);
+  const pair = cleanPair(req.params.pair);
   const limit = Math.min(parseInt(req.query.limit) || 20, 100);
   if (!pair) return res.status(404).json({ error: 'Unknown pair' });
   res.json(store[pair].history.slice(0, limit));
 });
 
 // ══════════════════════════════════════════════════════════
-//  GET /status  ←  Health check / dashboard
+//  GET /status
 // ══════════════════════════════════════════════════════════
 app.get('/status', (req, res) => {
   const status = {};
   for (const [pair, val] of Object.entries(store)) {
     status[pair] = {
-      hasData:    !!val.latest,
+      hasData: !!val.latest,
       lastUpdate: val.latest?.ist_time || 'No data',
-      price:      val.latest?.price    || null,
-      bias:       val.latest?.bias     || null,
-      candles:    val.history.length,
+      price: val.latest?.price ?? null,
+      bias: val.latest?.bias ?? null,
+      candles: val.history.length,
+      finnhubPrice: prices[pair] || null,
     };
   }
   res.json({
-    server:  'ARIA Live Data Server',
-    version: '1.0',
+    server: 'ARIA Live Data Server',
+    version: '2.0',
+    finnhubWs: finnhubWsConnected ? 'connected' : 'disconnected',
+    prices,
     status,
-    uptime:  Math.round(process.uptime()) + 's',
+    uptime: Math.round(process.uptime()) + 's',
   });
 });
 
 // ══════════════════════════════════════════════════════════
-//  GET /  ←  Simple status page
+//  GET /
 // ══════════════════════════════════════════════════════════
 app.get('/', (req, res) => {
   const lines = Object.entries(store).map(([pair, val]) => {
     const d = val.latest;
+    const src = d?.source === 'finnhub-ws' ? 'Finnhub WS' : d ? 'Legacy POST' : '—';
     return d
-      ? `<tr><td>${pair}</td><td>${d.price}</td><td>${d.bias}</td><td>${d.ist_time}</td><td>${val.history.length}</td></tr>`
-      : `<tr><td>${pair}</td><td colspan="4" style="color:#666">Waiting for TradingView alert...</td></tr>`;
+      ? `<tr><td>${pair}</td><td>${d.price}</td><td>${d.bias ?? '—'}</td><td>${src}</td><td>${d.ist_time}</td><td>${val.history.length}</td></tr>`
+      : `<tr><td>${pair}</td><td colspan="5" style="color:#666">Waiting for data…</td></tr>`;
   });
 
   res.send(`<!DOCTYPE html>
@@ -244,7 +379,7 @@ app.get('/', (req, res) => {
 <meta http-equiv="refresh" content="10">
 <style>
   body { font-family: -apple-system, sans-serif; background: #0D0D0D; color: #fff; padding: 40px; }
-  h1 { color: #C9A84C; } h2 { color: #888; font-size: 14px; font-weight: normal; }
+  h1 { color: #00D4FF; } h2 { color: #888; font-size: 14px; font-weight: normal; }
   table { border-collapse: collapse; width: 100%; margin-top: 20px; }
   th { text-align: left; padding: 10px 16px; background: #141414; color: #888; font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; }
   td { padding: 12px 16px; border-bottom: 1px solid #2A2A2A; font-family: "SF Mono", monospace; font-size: 13px; }
@@ -254,12 +389,13 @@ app.get('/', (req, res) => {
 </head>
 <body>
 <h1>⚡ ARIA Live Data Server</h1>
-<h2>Auto-refreshes every 10 seconds</h2>
+<h2>Prices: Finnhub WebSocket (OANDA EUR/USD &amp; AUD/USD) · Auto-refresh 10s</h2>
+<p class="uptime">WS: <span class="${finnhubWsConnected ? 'ok' : 'warn'}">${finnhubWsConnected ? 'connected' : 'disconnected / reconnecting'}</span></p>
 <table>
-  <thead><tr><th>Pair</th><th>Price</th><th>Bias</th><th>Last Update (IST)</th><th>Candles</th></tr></thead>
+  <thead><tr><th>Pair</th><th>Price</th><th>Bias</th><th>Source</th><th>Last Update (IST)</th><th>History</th></tr></thead>
   <tbody>${lines.join('')}</tbody>
 </table>
-<p class="uptime">Server uptime: ${Math.round(process.uptime())}s | Endpoint: POST /webhook | GET /latest/:pair</p>
+<p class="uptime">Uptime: ${Math.round(process.uptime())}s · GET /latest · POST /webhook · POST /update</p>
 </body>
 </html>`);
 });
@@ -267,16 +403,18 @@ app.get('/', (req, res) => {
 // ── START ─────────────────────────────────────────────────
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
+  startFinnhubWebSocket();
   console.log(`
 ╔══════════════════════════════════════════╗
 ║     ARIA Live Data Server — Running      ║
 ║     Port: ${PORT}                           ║
 ║                                          ║
-║  Endpoints:                              ║
-║  POST /webhook      ← TradingView        ║
+║  Prices: Finnhub WebSocket               ║
 ║  GET  /latest       ← All pairs          ║
-║  GET  /latest/EURUSD ← Single pair       ║
-║  GET  /status       ← Health check       ║
+║  GET  /latest/EURUSD                     ║
+║  POST /webhook      ← Legacy             ║
+║  POST /update       ← Legacy alias       ║
+║  GET  /status       ← Health + prices    ║
 ╚══════════════════════════════════════════╝
   `);
 });
