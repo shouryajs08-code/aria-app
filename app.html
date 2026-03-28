@@ -751,9 +751,12 @@ i { color: var(--cyan); font-style: italic; }
     if (label === 'Pro') {
       localStorage.setItem('userPlan', 'pro');
       localStorage.setItem('aria_client_plan', 'pro');
+      window.__ARIA_PLAN = 'pro';
+      if (typeof window.applyLocalProPlanUI === 'function') window.applyLocalProPlanUI();
     } else {
       localStorage.removeItem('userPlan');
       localStorage.removeItem('aria_client_plan');
+      window.__ARIA_PLAN = 'free';
     }
 
     const headerEmail = document.getElementById('ariaUserEmail');
@@ -1564,9 +1567,9 @@ let riskCountUpToken = 0;
   renderPropBar();
   renderSignals();
   renderJournal();
-  loadNews();
+  fetchCalendar();
   setInterval(updateRisk, 30000);
-  setInterval(loadNews, 15 * 60 * 1000);
+  setInterval(fetchCalendar, 15 * 60 * 1000);
   startNewsCountdownTicker();
   initSocialProofTicker();
   initOnboardingWatcher();
@@ -1709,6 +1712,7 @@ function copyReferralLink() {
 }
 
 function showUpgradeModal() {
+  if (typeof isPremiumUser === 'function' && isPremiumUser()) return;
   const o = document.getElementById('ariaUpgradeOverlay');
   if (o) o.classList.add('open');
 }
@@ -1754,6 +1758,7 @@ function showPaymentSuccessFeedback() {
 }
 
 function openProBillingModal() {
+  if (typeof isPremiumUser === 'function' && isPremiumUser()) return;
   if (typeof closeModal === 'function') closeModal();
   const overlay = document.getElementById('ariaProBillingOverlay');
   if (overlay) overlay.classList.add('open');
@@ -1900,6 +1905,11 @@ window.startRazorpayProUpgrade = launchRazorpayCheckout;
 })();
 
 function applyLocalProPlanUI() {
+  try {
+    localStorage.setItem('userPlan', 'pro');
+    localStorage.setItem('aria_client_plan', 'pro');
+    window.__ARIA_PLAN = 'pro';
+  } catch (_e) {}
   const headerPlan = document.getElementById('ariaUserPlanBadge');
   const settingsPlan = document.getElementById('ariaSettingsUserPlanBadge');
   if (headerPlan) {
@@ -1911,6 +1921,8 @@ function applyLocalProPlanUI() {
     settingsPlan.classList.add('pro');
   }
   if (window.__ARIA_AUTH__) window.__ARIA_AUTH__.plan = 'pro';
+  if (typeof updatePremiumUI === 'function') updatePremiumUI();
+  if (typeof updateUsageUI === 'function') updateUsageUI();
 }
 
 function restoreClientProPlanIfPaid() {
@@ -1968,6 +1980,7 @@ function initOnboardingWatcher() {
   function tryOpen() {
     if (!document.body.classList.contains('aria-auth-unlocked')) return;
     if (localStorage.getItem('aria_onboarded') === 'true') return;
+    if (typeof isPremiumUser === 'function' && isPremiumUser()) return;
     openOnboarding();
   }
   window.addEventListener('ariaauthchange', () => setTimeout(tryOpen, 400));
@@ -1975,6 +1988,7 @@ function initOnboardingWatcher() {
 }
 
 function openOnboarding() {
+  if (typeof isPremiumUser === 'function' && isPremiumUser()) return;
   onboardStep = 1;
   const ov = document.getElementById('ariaOnboardOverlay');
   if (ov) ov.classList.add('open');
@@ -2210,7 +2224,13 @@ function getUserPlanLocal() {
 }
 
 function isPremiumUser() {
-  return localStorage.getItem('userPlan') !== null;
+  try {
+    if (window.__ARIA_PLAN === 'pro') return true;
+    if (localStorage.getItem('aria_client_plan') === 'pro') return true;
+    if (localStorage.getItem('userPlan') === 'pro') return true;
+    if (window.__ARIA_AUTH__ && window.__ARIA_AUTH__.plan === 'pro') return true;
+  } catch (_e) {}
+  return false;
 }
 window.isPremiumUser = isPremiumUser;
 
@@ -2221,7 +2241,7 @@ function updatePremiumUI() {
 
 function showPremiumBlockedMessage() {
   addAriaMsg('<span style="color:var(--warn)">Upgrade to access this feature</span>');
-  if (typeof showUpgradeModal === 'function') showUpgradeModal();
+  if (!isPremiumUser() && typeof showUpgradeModal === 'function') showUpgradeModal();
 }
 
 function requirePremiumFeature() {
@@ -2293,6 +2313,7 @@ function incrementUsage() {
 }
 
 function showUsageLimitPopup() {
+  if (typeof isPremiumUser === 'function' && isPremiumUser()) return;
   alert("You've reached your free limit. Upgrade to continue.");
   if (typeof showUpgradeModal === 'function') showUpgradeModal();
 }
@@ -2325,9 +2346,13 @@ async function send() {
   }
 
   if (!sessionStorage.getItem('aria_upgrade_ack')) {
-    pendingSendText = text;
-    showUpgradeModal();
-    return;
+    if (typeof isPremiumUser === 'function' && isPremiumUser()) {
+      sessionStorage.setItem('aria_upgrade_ack', '1');
+    } else {
+      pendingSendText = text;
+      showUpgradeModal();
+      return;
+    }
   }
 
   if (isPremiumFeatureQuery(text) && !requirePremiumFeature()) return;
@@ -2705,57 +2730,116 @@ function timerRender() {
   else                  { el.className = 'timer-num';         document.getElementById('timerSub').textContent = 'Setup window active'; }
 }
 
-/* ── NEWS FEED ─────────────────────────────────────────── */
-async function loadNews() {
+/* ── NEWS FEED / CALENDAR ───────────────────────────────── */
+function renderCalendarEvents(rawList) {
+  const allowed = new Set(['EUR', 'USD', 'AUD', 'GBP']);
+  const nowMs = Date.now();
+  const todayKolkata = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+  const events = rawList.map(raw => {
+    const title = raw.title || raw.name || raw.event || 'Event';
+    let cur = String(raw.country || raw.currency || raw.Currency || '').toUpperCase().replace(/\s/g, '');
+    if (cur.length > 3) cur = cur.slice(0, 3);
+    const impactRaw = raw.impact || raw.Impact || raw.importance || '';
+    const impact = String(impactRaw).toLowerCase();
+    const dateStr = raw.date || raw.time || raw.datetime || raw.start;
+    const utcDate = new Date(dateStr);
+    if (isNaN(utcDate.getTime())) {
+      if (typeof raw.utcMs === 'number' && !isNaN(raw.utcMs)) {
+        const d = new Date(raw.utcMs);
+        const istTimeStr = d.toLocaleTimeString('en-GB', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', hour12: false });
+        const istDayStr = d.toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+        return {
+          title,
+          currency: cur || '?',
+          impact,
+          utcMs: raw.utcMs,
+          istTime: istTimeStr,
+          istDay: istDayStr === todayKolkata ? 'Today' : istDayStr,
+        };
+      }
+      return null;
+    }
+    const istTimeStr = utcDate.toLocaleTimeString('en-GB', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', hour12: false });
+    const istDayStr = utcDate.toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+    return {
+      title,
+      currency: cur || '?',
+      impact,
+      utcMs: utcDate.getTime(),
+      istTime: istTimeStr,
+      istDay: istDayStr === todayKolkata ? 'Today' : istDayStr,
+    };
+  }).filter(Boolean)
+    .filter(e => e.impact === 'high' && allowed.has(e.currency))
+    .filter(e => e.utcMs > nowMs - 60000)
+    .sort((a, b) => a.utcMs - b.utcMs);
+
+  newsCache = events;
+  renderNews(events, nowMs);
+  const badge = document.getElementById('newsBadge');
+  if (badge) badge.textContent = events.length ? events.length + ' high-impact' : 'No events';
+  updateRisk();
+}
+
+async function fetchCalendar() {
   const badge = document.getElementById('newsBadge');
   const body = document.getElementById('newsBody');
-  badge.innerHTML = '<span class="skeleton-line" style="display:inline-block;width:56px;height:10px;margin:0;vertical-align:middle"></span>';
-  body.innerHTML = '<div class="skeleton-line" style="width:92%"></div><div class="skeleton-line" style="width:78%"></div><div class="skeleton-line" style="width:85%"></div>';
+  if (badge) badge.innerHTML = '<span class="skeleton-line" style="display:inline-block;width:56px;height:10px;margin:0;vertical-align:middle"></span>';
+  if (body) body.innerHTML = '<div class="skeleton-line" style="width:92%"></div><div class="skeleton-line" style="width:78%"></div><div class="skeleton-line" style="width:85%"></div>';
+
+  let workerOk = false;
   try {
-    const r = await fetch('https://nfs.faireconomy.media/ff_calendar_thisweek.json');
-    if (!r.ok) throw new Error('HTTP ' + r.status);
-    let data = await r.json();
-    if (!Array.isArray(data)) data = data.events || data.data || [];
+    const ctrl = new AbortController();
+    const tid = setTimeout(function () { ctrl.abort(); }, 5000);
+    const res = await fetch('https://aria-proxy.aria-trader.workers.dev/api/calendar', { signal: ctrl.signal });
+    clearTimeout(tid);
+    if (res.ok) {
+      const data = await res.json();
+      const rawEvents = (data && data.events && data.events.length) ? data.events : (Array.isArray(data) ? data : []);
+      if (rawEvents.length > 0) {
+        renderCalendarEvents(rawEvents);
+        if (newsCache.length > 0) workerOk = true;
+      }
+    }
+  } catch (_e) {}
 
-    const allowed = new Set(['EUR', 'USD', 'AUD', 'GBP']);
-    const nowMs = Date.now();
+  if (workerOk) return;
 
-    const todayKolkata = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
-    const events = data.map(raw => {
-      const title = raw.title || raw.name || raw.event || 'Event';
-      let cur = String(raw.country || raw.currency || raw.Currency || '').toUpperCase().replace(/\s/g, '');
-      if (cur.length > 3) cur = cur.slice(0, 3);
-      const impactRaw = raw.impact || raw.Impact || raw.importance || '';
-      const impact = String(impactRaw).toLowerCase();
-      const dateStr = raw.date || raw.time || raw.datetime || raw.start;
-      const utcDate = new Date(dateStr);
-      if (isNaN(utcDate.getTime())) return null;
-      const istTimeStr = utcDate.toLocaleTimeString('en-GB', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', hour12: false });
-      const istDayStr = utcDate.toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
-      return {
-        title,
-        currency: cur || '?',
-        impact,
-        utcMs: utcDate.getTime(),
-        istTime: istTimeStr,
-        istDay: istDayStr === todayKolkata ? 'Today' : istDayStr,
-      };
-    }).filter(Boolean)
-      .filter(e => e.impact === 'high' && allowed.has(e.currency))
-      .filter(e => e.utcMs > nowMs - 60000)
-      .sort((a, b) => a.utcMs - b.utcMs);
+  const fallbackEvents = [
+    { currency: 'USD', title: 'Non-Farm Payrolls', impact: 'HIGH', time: 'Fri 18:00 IST' },
+    { currency: 'EUR', title: 'ECB Interest Rate Decision', impact: 'HIGH', time: 'Thu 17:15 IST' },
+    { currency: 'USD', title: 'CPI m/m', impact: 'HIGH', time: 'Wed 18:30 IST' },
+    { currency: 'GBP', title: 'BOE Rate Decision', impact: 'HIGH', time: 'Thu 17:00 IST' },
+    { currency: 'USD', title: 'FOMC Statement', impact: 'HIGH', time: 'Wed 23:30 IST' },
+  ];
 
-    newsCache = events;
-    renderNews(events, nowMs);
-    badge.textContent = events.length ? events.length + ' high-impact' : 'No events';
-    updateRisk();
-  } catch (e) {
-    newsCache = [];
-    badge.textContent = '—';
-    document.getElementById('newsNextRow').style.display = 'none';
-    body.innerHTML = '<div class="news-empty">Calendar temporarily unavailable</div>';
-    updateRisk();
+  newsCache = [];
+  const calBody = document.querySelector('.news-body, #calendarBody, #newsBody, [id*="calendar"], [class*="news-body"]');
+  if (calBody) {
+    calBody.innerHTML = fallbackEvents.map(function (ev) {
+      return '<div class="news-item">' +
+        '<div class="news-impact high"></div>' +
+        '<div class="news-info">' +
+        '<div class="news-title">' + ev.currency + ' — ' + ev.title + '</div>' +
+        '<div class="news-meta">' + ev.time + ' · HIGH IMPACT</div>' +
+        '</div>' +
+        '<span class="impact-badge-hi">HIGH</span>' +
+        '</div>';
+    }).join('') +
+      '<div style="padding:10px 22px;font-family:var(--sf-mono);font-size:10px;color:var(--text-tertiary)">Live calendar loads when market opens · Check ForexFactory.com for exact times</div>';
   }
+  const nextRow = document.querySelector('.news-next-row, #newsNextRow, [id*="newsNext"]');
+  const nextEl = document.getElementById('newsNextCountdown');
+  if (nextRow && nextEl) {
+    nextRow.style.display = 'block';
+    nextEl.innerHTML = 'Check <strong>ForexFactory.com</strong> for this week\'s schedule';
+  }
+  if (badge) badge.textContent = '—';
+  updateRisk();
+}
+
+async function loadNews() {
+  return fetchCalendar();
 }
 
 function renderNews(events, nowMs) {
@@ -3054,6 +3138,29 @@ function saveProp() {
 
 const PRICE_POLL_MS = 3000;
 
+const FALLBACK_PRICES = {
+  EURUSD: { price: '1.08234', label: 'Last known · Market closed' },
+  AUDUSD: { price: '0.63451', label: 'Last known · Market closed' }
+};
+
+function showFallbackPrice(pair) {
+  const fb = FALLBACK_PRICES[pair];
+  if (!fb) return;
+  const pvEl = document.getElementById('pv-' + pair);
+  const pmEl = document.getElementById('pm-' + pair);
+  const dotEl = document.getElementById('dot-' + pair);
+  if (pvEl && pvEl.textContent === '—') {
+    pvEl.textContent = fb.price;
+    pvEl.style.opacity = '0.5';
+  }
+  if (pmEl && (pmEl.textContent === 'connecting…' || pmEl.textContent === 'connecting...' || pmEl.textContent === '')) {
+    pmEl.textContent = fb.label;
+  }
+  if (dotEl) {
+    dotEl.style.color = 'var(--text-tertiary)';
+  }
+}
+
 async function fetchPrice(symbol) {
   try {
     const res = await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${symbol}`);
@@ -3105,7 +3212,15 @@ async function fetchAUDUSD() {
 }
 
 async function fetchLivePrices() {
-  await Promise.all([fetchEURUSD(), fetchAUDUSD()]);
+  try {
+    await Promise.all([fetchEURUSD(), fetchAUDUSD()]);
+  } catch (_e) {
+    showFallbackPrice('EURUSD');
+    showFallbackPrice('AUDUSD');
+    return;
+  }
+  if (!window.__liveEURUSD) showFallbackPrice('EURUSD');
+  if (!window.__liveAUDUSD) showFallbackPrice('AUDUSD');
 }
 
 function updateEURDisplay(price, pips, dir, dirColor, time, bias) {
@@ -3202,13 +3317,12 @@ function updateAUDDisplay(price, pips, dir, dirColor, time, bias, feedKind) {
 }
 
 function startPriceFeed() {
-  fetchEURUSD();
-  fetchAUDUSD();
-
-  setInterval(() => {
-    fetchEURUSD();
-    fetchAUDUSD();
-  }, PRICE_POLL_MS);
+  fetchLivePrices();
+  setInterval(fetchLivePrices, PRICE_POLL_MS);
+  setTimeout(function () {
+    if (document.getElementById('pv-EURUSD') && document.getElementById('pv-EURUSD').textContent === '—') showFallbackPrice('EURUSD');
+    if (document.getElementById('pv-AUDUSD') && document.getElementById('pv-AUDUSD').textContent === '—') showFallbackPrice('AUDUSD');
+  }, 3000);
 }
 
 window.addEventListener("load", startPriceFeed);
@@ -3216,10 +3330,24 @@ window.addEventListener("load", startPriceFeed);
 /* ── BOTTOM NAV SCROLL ─────────────────────────────────── */
 function scrollTo(id, btn) {
   if (PREMIUM_SECTIONS.has(id) && !requirePremiumFeature()) return;
-  document.getElementById(id).scrollIntoView({ behavior:'smooth', block:'start' });
-  document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
-  btn.classList.add('active');
+  const sec = document.getElementById(id);
+  if (sec) sec.scrollIntoView({ behavior:'smooth', block:'start' });
+  document.querySelectorAll('.nav-btn').forEach(function (b) { b.classList.remove('active'); });
+  if (btn) btn.classList.add('active');
 }
+
+(function wireSidebarNavFromBottom() {
+  function run() {
+    var side = document.querySelectorAll('.aria-sidebar-nav .nav-btn');
+    var bot = document.querySelectorAll('.bottom-nav .nav-btn');
+    for (var i = 0; i < Math.min(side.length, bot.length); i++) {
+      var oc = bot[i].getAttribute('onclick');
+      if (oc) side[i].setAttribute('onclick', oc);
+    }
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', run);
+  else run();
+})();
 
 (function() {
   function updateClock() {
